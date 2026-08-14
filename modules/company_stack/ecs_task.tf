@@ -98,6 +98,8 @@ resource "aws_ecs_task_definition" "reactive" {
         { name = "NODE_ENV", value = "production" },
         { name = "PORT", value = "3000" },
         { name = "AWS_REGION", value = var.aws_region },
+        # Scheduler role ARNs are built from it; a hardcoded one is a cross-account PassRole in byoc.
+        { name = "AWS_ACCOUNT_ID", value = data.aws_caller_identity.current.account_id },
         { name = "CLIENT", value = var.company.name },
         { name = "COMPANY_DOMAIN", value = var.company.domain },
         # var.tenant_name, not terraform.workspace. Identical on saas (tenants/main.tf sets
