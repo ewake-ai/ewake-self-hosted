@@ -1,0 +1,11 @@
+# Terraform working state — never commit these.
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+errored.tfstate
+*.tfplan
+
+# Your own values. terraform.tfvars.example is the template; your real file stays local.
+*.auto.tfvars
+terraform.tfvars
