@@ -182,28 +182,6 @@ variable "neo4j_instance_type" {
   default     = "t4g.small"
 }
 
-# NOT WIRED UP YET — a byoc install currently has no working login.
-#
-# Nothing in company_stack reads this variable today: it is accepted at plan time
-# and then dropped. Byoc authentication is being built on a Dex sidecar in the
-# reactive task (PRs #3097-#3101), and the final shape of the input — whether it
-# stays a single secret ARN of this form, or Dex takes its connector config some
-# other way — is decided by that stack, not here.
-#
-# Setting it is therefore harmless but does nothing. Leave it null until the Dex
-# work lands, then re-read this block: it will either be repurposed or removed.
-#
-# The intent it encodes still holds: OIDC/IdP client credentials never travel
-# through Ewake. The customer creates the app in their own IdP, stores the
-# credentials in a Secrets Manager entry in THEIR OWN AWS account, and passes only
-# an ARN. Ewake never sees the client secret.
-variable "oidc_secret_arn" {
-  description = "Reserved for byoc login; NOT consumed by any resource today. Byoc auth arrives with the Dex sidecar stack (#3097-#3101), which owns the final input shape. Leave null — setting it has no effect at plan or runtime."
-  type        = string
-  default     = null
-  nullable    = true
-}
-
 locals {
   common_tags = {
     Project    = "ewake"
