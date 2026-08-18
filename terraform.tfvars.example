@@ -11,7 +11,7 @@ company = {
 
   # SSO providers for login. At least one is required.
   # Register redirect URI: https://<name>.<root_domain>/sso/callback
-  # Then configure via scripts/set-dex-connector.sh.
+  # Then write the connector JSON to Secrets Manager — see README.
   sso_connectors = ["google"]
 }
 

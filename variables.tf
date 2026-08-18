@@ -202,7 +202,6 @@ locals {
   # or company_stack fails on a missing key.
   ecr_repository_urls = {
     reactive                 = "${local.ewake_ecr_registry}/ewake-reactive"
-    "db-migrate"             = "${local.ewake_ecr_registry}/ewake-db-migrate"
     "cloudwatch-mcp"         = "${local.ewake_ecr_registry}/ewake-cloudwatch-mcp"
     "dex-sidecar"            = "${local.ewake_ecr_registry}/ewake-dex-sidecar"
     "log-clustering-sidecar" = "${local.ewake_ecr_registry}/ewake-log-clustering-sidecar"

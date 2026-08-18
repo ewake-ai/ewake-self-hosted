@@ -59,6 +59,12 @@ aws s3api put-bucket-versioning \
 The Terraform user needs `s3:GetObject`, `s3:PutObject` and
 `s3:DeleteObject` on this bucket.
 
+> **Security note:** Terraform state contains sensitive values, including
+> SSO connector client secrets (written into the ECS task definition at
+> plan time). Enable server-side encryption on the bucket (SSE-S3 or
+> SSE-KMS), restrict access to the Terraform operator, and treat the
+> state file as holding credentials.
+
 ### Route53 hosted zone
 
 Create a Route53 hosted zone for your domain in this AWS account, then
@@ -165,15 +171,145 @@ Open the URL from `terraform output dashboard_url` — the login screen
 should appear. If the page doesn't load, check that DNS delegation
 propagated (the ACM cert validation can silently time out).
 
-### 2. Sign in
+### 2. Configure SSO
 
-The login screen shows the SSO providers you configured in
-`sso_connectors`. Click one and authenticate through your IdP.
+Login requires at least one SSO connector. The setup is a three-step
+process — two applies with a secret write in between.
 
-If no connectors are configured (`sso_connectors = []`), the Dex sidecar
-refuses to start and the login screen is empty — add at least one.
+**Step 1.** List the connector ID in `sso_connectors` in your tfvars
+and apply. This creates an empty Secrets Manager secret that Terraform
+owns:
 
-### 3. Connect Slack
+```hcl
+company = {
+  ...
+  sso_connectors = ["google"]   # or "okta", "github", etc.
+}
+```
+
+```sh
+terraform apply
+```
+
+> After this apply the dashboard is up but **nobody can log in**. The
+> secret holds a placeholder that Dex rejects on purpose. The sidecar
+> dies at startup, but it is non-essential so the service reports
+> healthy — this is expected, not a fault. Proceed to step 2.
+
+**Step 2.** Register an OIDC application in your identity provider with
+the redirect URI:
+
+```
+https://<company.name>.<root_domain>/sso/callback
+```
+
+Then write the connector JSON into the secret Terraform created. The
+secret path is `ewake/<tenant_name>/<company.name>/sso/<connector-id>`:
+
+```sh
+cat > connector.json << 'EOF'
+{
+  "type": "oidc",
+  "id": "google",
+  "name": "Google",
+  "config": {
+    "clientID": "....apps.googleusercontent.com",
+    "clientSecret": "...",
+    "redirectURI": "https://yourcompany.ewake.yourcompany.com/sso/callback",
+    "hostedDomains": ["yourcompany.com"]
+  }
+}
+EOF
+
+aws secretsmanager put-secret-value \
+  --secret-id "ewake/yourcompany/yourcompany/sso/google" \
+  --secret-string file://connector.json
+```
+
+For other providers, replace `"type": "oidc"` as needed — see
+[Connector examples](#connector-examples) below.
+
+**Step 3.** Apply again so Terraform reads the real secret and compiles
+it into the container environment, then force a redeploy:
+
+```sh
+terraform apply
+aws ecs update-service \
+  --cluster <tenant_name> --service <company.name> \
+  --task-definition <tenant_name>-<company.name>-reactive \
+  --force-new-deployment
+```
+
+The login screen should now show your SSO provider.
+
+Your IdP client secret stays in Secrets Manager **in your AWS account**.
+It is also present in the ECS task definition and in Terraform state
+(Terraform reads the secret at plan time to build the container config).
+Treat your state file accordingly.
+
+#### Connector examples
+
+**Generic OIDC (Okta, Entra ID, Auth0, Ping, any OIDC provider):**
+
+```json
+{
+  "type": "oidc",
+  "id": "okta",
+  "name": "Okta",
+  "config": {
+    "issuer": "https://yourcompany.okta.com",
+    "clientID": "0oa...",
+    "clientSecret": "...",
+    "redirectURI": "https://yourcompany.ewake.yourcompany.com/sso/callback",
+    "scopes": ["openid", "profile", "email"]
+  }
+}
+```
+
+For Microsoft Entra, use
+`"issuer": "https://login.microsoftonline.com/<tenant-id>/v2.0"`.
+Use a specific tenant ID, not `common`.
+
+**Google:**
+
+```json
+{
+  "type": "google",
+  "id": "google",
+  "name": "Google",
+  "config": {
+    "clientID": "....apps.googleusercontent.com",
+    "clientSecret": "...",
+    "redirectURI": "https://yourcompany.ewake.yourcompany.com/sso/callback",
+    "hostedDomains": ["yourcompany.com"]
+  }
+}
+```
+
+**GitHub:**
+
+```json
+{
+  "type": "github",
+  "id": "github",
+  "name": "GitHub",
+  "config": {
+    "clientID": "...",
+    "clientSecret": "...",
+    "redirectURI": "https://yourcompany.ewake.yourcompany.com/sso/callback"
+  }
+}
+```
+
+GitHub allows only one redirect URI per OAuth App, so each deployment
+needs its own: Settings → Developer settings → OAuth Apps → New.
+
+### 3. Sign in
+
+The login screen shows the SSO providers you configured above. Click
+one and authenticate through your IdP.
+
+### 4. Connect Slack
 
 From the dashboard, open the Slack integration and choose **"From a
 manifest"**. Ewake generates an app manifest; create the app in your
@@ -183,25 +319,6 @@ secret back into the dialog.
 Both credentials are stored in Secrets Manager **in your AWS account**.
 Inbound Slack events hit your deployment directly and are
 signature-verified locally — nothing routes through Ewake.
-
-### 4. SSO / single sign-on
-
-Each SSO connector needs an OIDC application registered in your identity
-provider with the redirect URI:
-
-```
-https://<company.name>.<root_domain>/sso/callback
-```
-
-After registering, write the connector configuration using the provided
-script:
-
-```sh
-scripts/set-dex-connector.sh
-```
-
-The IdP client secret stays in your AWS account (Secrets Manager) and
-never reaches Ewake.
 
 ### 5. Token / IAM-role integrations
 
@@ -241,8 +358,12 @@ To pin a specific build (for rollback, or a hotfix Ewake gave you):
 app_image_tag = "ewake-v0.145.0"   # or "sha-1a2b3c4d"
 ```
 
-`app_image_tag` pins the server and its migrations together. Leave it
-unset (or `null`) to follow `release_channel`.
+`app_image_tag` pins the reactive server and its database migrations
+together. It does **not** pin Lambda images (those follow
+`release_channel`) or sidecars (Dex, CloudWatch MCP, log clustering —
+those track `:latest`). A rollback to an older `app_image_tag` runs
+that server version against current Lambda and sidecar images. Leave
+`app_image_tag` unset (or `null`) to follow `release_channel`.
 
 ## Tearing down
 
