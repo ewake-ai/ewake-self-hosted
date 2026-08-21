@@ -4,10 +4,12 @@
 
 resource "aws_lb" "this" {
   name               = "${var.tenant_name}-tenant-alb"
-  internal           = false
+  internal           = var.alb_internal
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
+  # An internal ALB has no business in a public subnet: it takes private IPs either
+  # way, and leaving it public-side only widens what an SG mistake would expose.
+  subnets = var.alb_internal ? aws_subnet.private[*].id : aws_subnet.public[*].id
 
   # Strip headers whose names aren't [-A-Za-z0-9]+ rather than passing them to
   # reactive. Separate from desync_mitigation_mode, which stays on its

@@ -23,6 +23,12 @@ azs = ["eu-west-3a", "eu-west-3b"]
 
 # Optional overrides (defaults shown):
 # release_channel    = "stable"
+#
+# Private deployment: no public ingress, dashboard reached over VPN, a peered
+# network, or an SSM port-forward. Set both — `internal` removes the public IPs,
+# the CIDR list is what actually refuses a packet. See README → Private deployments.
+# alb_internal       = true
+# alb_ingress_cidrs  = ["10.10.0.0/16"]
 # vpc_cidr           = "10.10.0.0/16"
 # rds_instance_class = "db.t4g.small"
 # rds_storage_gb     = 50
