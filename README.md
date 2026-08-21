@@ -147,6 +147,54 @@ azs            = ["eu-west-3a", "eu-west-3b"]
 > Neo4j creation with `insufficient-capacity`, try `db.t4g.medium` /
 > `t4g.medium`, or pick different AZs.
 
+### Private deployments (no public ingress)
+
+By default the ALB is internet-facing and accepts 443/80 from anywhere. To keep
+the deployment private — an isolated account, or a security review that will not
+accept a public dashboard — set both:
+
+```hcl
+alb_internal      = true
+alb_ingress_cidrs = ["10.10.0.0/16"]   # your vpc_cidr, or a VPN range
+```
+
+Set them **together**. `alb_internal` moves the load balancer to the private
+subnets and drops its public IPs; `alb_ingress_cidrs` is what actually refuses a
+packet. Either alone leaves a gap.
+
+You still need a real, publicly-delegated `hosted_zone_id`. ACM validates by
+reading a DNS record, never by connecting to the load balancer, so a private ALB
+and a public zone are not in conflict — and without a validating certificate the
+apply cannot create the HTTPS listener that the rest of the stack depends on.
+The dashboard's DNS record simply resolves to private addresses.
+
+#### Reaching a private dashboard
+
+The VPC already carries `ssm`, `ssmmessages` and `ec2messages` interface
+endpoints, and the Neo4j instance runs in a private subnet with
+`AmazonSSMManagedInstanceCore`. That is enough to port-forward without a VPN,
+a bastion or any inbound rule:
+
+```sh
+INSTANCE=$(aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=*neo4j*" "Name=instance-state-name,Values=running" \
+  --query 'Reservations[0].Instances[0].InstanceId' --output text)
+
+aws ssm start-session --target "$INSTANCE" \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "host=<company.name>.<root_domain>,portNumber=443,localPortNumber=8443"
+```
+
+Then map the hostname to your loopback so the certificate still matches:
+
+```
+127.0.0.1  <company.name>.<root_domain>
+```
+
+in `/etc/hosts`, and open `https://<company.name>.<root_domain>:8443`. Users need
+`ssm:StartSession` on that instance and nothing else — no inbound access, no
+credentials on the box.
+
 ## First apply
 
 ```sh

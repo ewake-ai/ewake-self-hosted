@@ -65,6 +65,27 @@ variable "root_domain" {
   type        = string
 }
 
+# Both default to today's public shape, so an existing deployment sees no diff.
+# Set them together: an internal ALB still needs the ingress rule narrowed, since
+# the security group is what actually refuses the packet — `internal` only removes
+# the public IPs.
+variable "alb_internal" {
+  description = "Whether the tenant ALB is internal (private IPs, no public listener). Default false keeps the internet-facing shape. When true the ALB also moves to the private subnets, and the dashboard is reachable only from inside the VPC — over VPN, a peered network, or an SSM port-forward (see the README)."
+  type        = bool
+  default     = false
+}
+
+variable "alb_ingress_cidrs" {
+  description = "CIDRs allowed to reach the ALB on 443 and 80. Default is the public internet. Narrow this to the VPC CIDR (or a VPN range) for a private deployment; ACM validation is unaffected either way, since it reads DNS rather than connecting to the load balancer."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+
+  validation {
+    condition     = length(var.alb_ingress_cidrs) > 0
+    error_message = "alb_ingress_cidrs must list at least one CIDR; an empty list makes the dashboard unreachable by anything, including a port-forward."
+  }
+}
+
 variable "hosted_zone_id" {
   description = "Route53 hosted zone ID for var.root_domain. Must exist before apply — Terraform creates the ACM cert with DNS validation records here."
   type        = string
