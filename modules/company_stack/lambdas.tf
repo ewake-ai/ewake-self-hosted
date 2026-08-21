@@ -92,21 +92,13 @@ module "scheduled_lambdas" {
   langsmith_enabled       = !local.is_byoc
   langsmith_secret_string = one(data.aws_secretsmanager_secret_version.langsmith[*].secret_string)
   # knowledge-graph is the only scheduled Lambda that uses GithubService today; the child module scopes injection to it.
-  github_app_enabled                = length(data.aws_secretsmanager_secret_version.github_app) > 0
-  github_app_secret_string          = one(data.aws_secretsmanager_secret_version.github_app[*].secret_string)
-  datadog_api_key                   = one(data.aws_secretsmanager_secret_version.datadog_api_key[*].secret_string)
-  datadog_log_analysis_image_uri    = var.lambda_image_uris["datadog-log-analysis"]
-  loki_log_analysis_image_uri       = var.lambda_image_uris["loki-log-analysis"]
-  datadog_metric_analysis_image_uri = var.lambda_image_uris["datadog-metric-analysis"]
-  datadog_span_analysis_image_uri   = var.lambda_image_uris["datadog-span-analysis"]
-  knowledge_graph_image_uri         = var.lambda_image_uris["knowledge-graph"]
-  incident_indexing_image_uri       = var.lambda_image_uris["incident-indexing"]
-  release_watch_image_uri           = var.lambda_image_uris["release-watch"]
-  custom_mcp_discovery_image_uri    = var.lambda_image_uris["custom-mcp-discovery"]
-  kubernetes_discovery_image_uri    = var.lambda_image_uris["kubernetes-discovery"]
-  lambda_queue_url                  = aws_sqs_queue.lambda.url
-  log_clustering_function_name      = var.log_clustering_function_name
-  log_clustering_sidecar_url        = local.log_clustering_sidecar_url
-  internal_sg_id                    = local.log_clustering_sidecar_enabled ? aws_security_group.internal.id : null
-  tags                              = local.tags
+  github_app_enabled           = length(data.aws_secretsmanager_secret_version.github_app) > 0
+  github_app_secret_string     = one(data.aws_secretsmanager_secret_version.github_app[*].secret_string)
+  datadog_api_key              = one(data.aws_secretsmanager_secret_version.datadog_api_key[*].secret_string)
+  lambda_bundle_image_uri      = var.lambda_bundle_image_uri
+  lambda_queue_url             = aws_sqs_queue.lambda.url
+  log_clustering_function_name = var.log_clustering_function_name
+  log_clustering_sidecar_url   = local.log_clustering_sidecar_url
+  internal_sg_id               = local.log_clustering_sidecar_enabled ? aws_security_group.internal.id : null
+  tags                         = local.tags
 }

@@ -71,7 +71,7 @@ variable "hosted_zone_id" {
 }
 
 variable "ewake_aws_account_id" {
-  description = "AWS account ID that owns the Ewake ECRs. Used to build every image URI (reactive, cloudwatch-mcp, log-clustering-sidecar, every ewake-lambda-*). Pull is authorized by the aws_ecr_repository_policy Ewake attaches to those repos via terraform/shared/byoc_customers.tf. Defaults to Ewake's production account — override only if Ewake has told you a different one."
+  description = "AWS account ID that owns the Ewake ECRs. Used to build every image URI (reactive, cloudwatch-mcp, log-clustering-sidecar, the ewake-lambdas bundle, every remaining ewake-lambda-*). Pull is authorized by the aws_ecr_repository_policy Ewake attaches to those repos via terraform/shared/byoc_customers.tf — note the bundle is granted by its own byoc_lambda_bundle resource, so an account cleared for the per-Lambda repos is not automatically cleared for it. Defaults to Ewake's production account — override only if Ewake has told you a different one."
   type        = string
   default     = "058264427976"
 
@@ -208,23 +208,21 @@ locals {
   }
 
   # Container-image Lambdas company_stack consumes via var.lambda_image_uris.
-  # Names match src/lambdas/<dir>/Dockerfile in the ewake-ai/back repo and are
-  # pinned here because the byoc root has no way to introspect the Ewake-side
-  # ECRs. rds-bootstrap and log-clustering are NOT here — they are pinned to
-  # :latest in their own tf files (Ewake CI only publishes them under :latest).
+  # Only reactive is left: ewake-ai/back#3124 folded the nine scheduled Lambdas
+  # into the single ewake-lambdas bundle below and deleted their per-Lambda
+  # ECR repos, so pinning them here would resolve to tags CI no longer moves.
+  # rds-bootstrap and log-clustering are NOT here — they are pinned to :latest
+  # in their own tf files (Ewake CI only publishes them under :latest).
   lambda_names = toset([
     "reactive",
-    "datadog-log-analysis",
-    "loki-log-analysis",
-    "datadog-metric-analysis",
-    "datadog-span-analysis",
-    "knowledge-graph",
-    "incident-indexing",
-    "release-watch",
-    "custom-mcp-discovery",
-    "kubernetes-discovery",
   ])
   lambda_image_uris = {
     for name in local.lambda_names : name => "${local.ewake_ecr_registry}/ewake-lambda-${name}:${var.release_channel}"
   }
+
+  # The nine scheduled Lambdas all run from this one image, each picking its
+  # handler via image_config. Follows release_channel like the rest of the
+  # fleet — app_image_tag does not pin it (see the image-pinning note in the
+  # README).
+  lambda_bundle_image_uri = "${local.ewake_ecr_registry}/ewake-lambdas:${var.release_channel}"
 }

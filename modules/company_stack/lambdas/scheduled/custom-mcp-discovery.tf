@@ -9,11 +9,16 @@ resource "aws_lambda_function" "custom_mcp_discovery" {
   description   = "\"custom-mcp-discovery\" for ${var.arn_prefix}"
   role          = var.task_role_arn
   package_type  = "Image"
-  image_uri     = var.custom_mcp_discovery_image_uri
+  image_uri     = var.lambda_bundle_image_uri
   # Runs an agentic discovery loop per connected MCP server, so it needs more
   # headroom than the deterministic Datadog scrapers.
   timeout     = 900
   memory_size = 1024
+
+  # The bundled image has no CMD, so this is what makes the function run this Lambda.
+  image_config {
+    command = ["handlers/custom-mcp-discovery.handler"]
+  }
 
   environment {
     variables = merge(local.scheduled_lambda_env_common, {

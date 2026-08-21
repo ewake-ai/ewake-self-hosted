@@ -9,9 +9,14 @@ resource "aws_lambda_function" "datadog_span_analysis" {
   description   = "\"datadog-span-analysis\" for ${var.arn_prefix}"
   role          = var.task_role_arn
   package_type  = "Image"
-  image_uri     = var.datadog_span_analysis_image_uri
+  image_uri     = var.lambda_bundle_image_uri
   timeout       = 300
   memory_size   = 512
+
+  # The bundled image has no CMD, so this is what makes the function run this Lambda.
+  image_config {
+    command = ["handlers/datadog-span-analysis.handler"]
+  }
 
   environment {
     variables = merge(local.scheduled_lambda_env_common, {

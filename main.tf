@@ -39,9 +39,10 @@ module "company" {
   reactive_service_image_uri     = "${local.ecr_repository_urls["reactive"]}:${local.app_image_tag}"
   # The service image, not ewake-db-migrate: one build serves and migrates, so app_image_tag
   # cannot pin a server against another commit's schema. db_migrate.tf supplies the command.
-  db_migrate_image_uri = "${local.ecr_repository_urls["reactive"]}:${local.app_image_tag}"
-  lambda_image_uris    = local.lambda_image_uris
-  neo4j_instance_type  = var.neo4j_instance_type
+  db_migrate_image_uri    = "${local.ecr_repository_urls["reactive"]}:${local.app_image_tag}"
+  lambda_image_uris       = local.lambda_image_uris
+  lambda_bundle_image_uri = local.lambda_bundle_image_uri
+  neo4j_instance_type     = var.neo4j_instance_type
 
   depends_on = [
     aws_db_instance.this,

@@ -76,40 +76,9 @@ variable "langsmith_secret_string" {
   sensitive   = true
 }
 
-variable "datadog_log_analysis_image_uri" {
-  type = string
-}
-
-variable "loki_log_analysis_image_uri" {
-  type = string
-}
-
-variable "datadog_metric_analysis_image_uri" {
-  type = string
-}
-
-variable "datadog_span_analysis_image_uri" {
-  type = string
-}
-
-variable "knowledge_graph_image_uri" {
-  type = string
-}
-
-variable "incident_indexing_image_uri" {
-  type = string
-}
-
-variable "release_watch_image_uri" {
-  type = string
-}
-
-variable "custom_mcp_discovery_image_uri" {
-  type = string
-}
-
-variable "kubernetes_discovery_image_uri" {
-  type = string
+variable "lambda_bundle_image_uri" {
+  description = "Consolidated image holding all nine scheduled handlers; each function selects its own via image_config. Replaces the nine ewake-lambda-<name> repos retired in ewake-ai/back#3124."
+  type        = string
 }
 
 variable "tags" {

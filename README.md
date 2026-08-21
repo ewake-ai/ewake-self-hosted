@@ -365,6 +365,48 @@ those track `:latest`). A rollback to an older `app_image_tag` runs
 that server version against current Lambda and sidecar images. Leave
 `app_image_tag` unset (or `null`) to follow `release_channel`.
 
+### One-time: moving the scheduled Lambdas onto the bundled image
+
+**Only deployments first applied before Ewake v0.150.0 need this.** A fresh
+deployment creates these functions on the bundled image already — skip ahead.
+
+The nine scheduled Lambdas (`knowledge-graph`, `incident-indexing`,
+`release-watch`, the Datadog and Loki analysers, and the two discovery
+loops) used to run from one ECR repository each. They now share a single
+`ewake-lambdas` image and select their handler with `image_config`. The
+old per-Lambda repositories are no longer built, so a deployment left on
+them silently freezes on its last image.
+
+`terraform apply` alone will **not** move them. Every Lambda in this stack
+carries `lifecycle { ignore_changes = [image_uri] }`, so changing the image
+is invisible to a normal plan. Replace them explicitly, once:
+
+```sh
+terraform apply $(for l in \
+  datadog-log-analysis loki-log-analysis datadog-metric-analysis \
+  datadog-span-analysis knowledge-graph incident-indexing \
+  release-watch custom-mcp-discovery kubernetes-discovery; do
+    printf ' -replace=module.company.module.scheduled_lambdas.aws_lambda_function.%s' "${l//-/_}"
+  done)
+```
+
+The plan should show nine functions replaced and nothing else. Each one is
+recreated in place under the same name and schedule; the EventBridge rules
+that invoke them are untouched. Expect a cold start on the next scheduled
+run, no other downtime.
+
+Verify afterwards that all nine report the bundled image:
+
+```sh
+aws lambda get-function --function-name <tenant_name>-<company.name>-knowledge-graph \
+  --query 'Code.ImageUri' --output text
+# → ...amazonaws.com/ewake-lambdas:stable
+```
+
+If a function still shows `ewake-lambda-knowledge-graph`, the replace did
+not take — re-run rather than leaving it, since the old repository can be
+deleted on the Ewake side at any point after every deployment has moved.
+
 ## Tearing down
 
 `terraform destroy` alone won't work — three resources have deletion

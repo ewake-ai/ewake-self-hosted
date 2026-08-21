@@ -37,9 +37,14 @@ resource "aws_lambda_function" "knowledge_graph" {
   description   = "\"knowledge-graph\" for ${var.arn_prefix}"
   role          = var.task_role_arn
   package_type  = "Image"
-  image_uri     = var.knowledge_graph_image_uri
+  image_uri     = var.lambda_bundle_image_uri
   timeout       = 900
   memory_size   = 1024
+
+  # The bundled image has no CMD, so this is what makes the function run this Lambda.
+  image_config {
+    command = ["handlers/knowledge-graph.handler"]
+  }
 
   environment {
     variables = local.knowledge_graph_env

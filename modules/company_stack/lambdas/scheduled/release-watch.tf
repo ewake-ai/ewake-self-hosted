@@ -16,9 +16,14 @@ resource "aws_lambda_function" "release_watch" {
   description   = "\"release-watch\" for ${var.arn_prefix}"
   role          = var.task_role_arn
   package_type  = "Image"
-  image_uri     = var.release_watch_image_uri
+  image_uri     = var.lambda_bundle_image_uri
   timeout       = 300
   memory_size   = 1024
+
+  # The bundled image has no CMD, so this is what makes the function run this Lambda.
+  image_config {
+    command = ["handlers/release-watch.handler"]
+  }
 
   environment {
     variables = merge(local.scheduled_lambda_env_common, {

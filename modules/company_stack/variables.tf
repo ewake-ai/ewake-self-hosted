@@ -273,8 +273,13 @@ variable "log_clustering_function_arn" {
 }
 
 variable "lambda_image_uris" {
-  description = "Map of <lambda-directory-name> => fully-qualified ECR image URI (with tag). Sourced from the shared root's lambda_ecr_repository_urls output. Used by the scheduled container Lambdas."
+  description = "Map of <lambda-directory-name> => fully-qualified ECR image URI (with tag). Only the reactive Lambda still has its own repository; the scheduled ones share lambda_bundle_image_uri."
   type        = map(string)
+}
+
+variable "lambda_bundle_image_uri" {
+  description = "Fully-qualified ECR image URI (with tag) of the consolidated scheduled-Lambda image (ewake-lambdas). Pulled cross-account from the Ewake registry, so it needs the byoc_lambda_bundle repository policy on the Ewake side."
+  type        = string
 }
 
 # ARM-only: the al2023_arm64 AMI in neo4j.tf is fixed to `arm64`, so this must
