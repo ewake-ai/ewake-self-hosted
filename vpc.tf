@@ -82,17 +82,28 @@ resource "aws_nat_gateway" "this" {
   depends_on = [aws_internet_gateway.this]
 }
 
+# Routes are standalone aws_route resources, deliberately, NOT in-line `route`
+# blocks. An in-line block makes Terraform authoritative over the table's entire
+# route set, so any route the customer adds out of band — a VPN, a peering, a
+# Transit Gateway attachment — is deleted on the next apply. It does not even
+# surface as drift to argue about: the plan shows the route table updating and
+# the customer's connectivity disappears. Standalone resources let Terraform
+# manage only what it declares and leave the rest alone.
+#
+# The two cannot be mixed on one table (the provider overwrites in-line rules),
+# so if a route ever needs adding here, add another aws_route.
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.this.id
-  }
 
   tags = {
     Name = "${var.tenant_name}-public-rt"
   }
+}
+
+resource "aws_route" "public_default" {
+  route_table_id         = aws_route_table.public.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.this.id
 }
 
 resource "aws_route_table_association" "public" {
@@ -105,14 +116,18 @@ resource "aws_route_table" "private" {
   count  = length(var.azs)
   vpc_id = aws_vpc.this.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.this[count.index].id
-  }
-
   tags = {
     Name = "${var.tenant_name}-private-rt-${var.azs[count.index]}"
   }
+}
+
+# See the note above aws_route_table.public: standalone so a customer-managed
+# VPN or peering route on the same table survives our applies.
+resource "aws_route" "private_default" {
+  count                  = length(var.azs)
+  route_table_id         = aws_route_table.private[count.index].id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.this[count.index].id
 }
 
 resource "aws_route_table_association" "private" {
