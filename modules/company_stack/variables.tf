@@ -36,8 +36,14 @@ variable "tenant_name" {
 }
 
 variable "root_domain" {
-  description = "Root domain the public hostname is built on top of (e.g. ewake.ai). The per-company host header matches <company>.<root_domain>."
+  description = "Root domain the public hostname is built on top of (e.g. ewake.ai). The per-company host header matches var.company_host, which defaults to <company>.<root_domain>."
   type        = string
+}
+
+variable "company_host" {
+  description = "Fully-qualified host this company answers on. Null keeps the historical <company>.<root_domain>. The byoc root sets it explicitly so a single-tenant deployment can be served at the delegated zone's apex."
+  type        = string
+  default     = null
 }
 
 variable "sso_base_url" {
@@ -124,8 +130,15 @@ variable "alb_listener_arn" {
 }
 
 variable "hosted_zone_id" {
-  description = "Route53 zone ID for var.root_domain. Used for the per-company A record."
+  description = "Route53 zone ID for var.root_domain, used for the per-company A record. Null skips the record entirely, for a deployment whose DNS the customer owns — the caller is then responsible for pointing var.company_host at the ALB."
   type        = string
+  default     = null
+}
+
+variable "extra_host_headers" {
+  description = "Additional Host values the reactive listener rule matches, alongside var.company_host. Empty (default) matches company_host alone. Used during a hostname cutover, where both names must serve at once; each also needs a certificate on the listener, which is the caller's side."
+  type        = list(string)
+  default     = []
 }
 
 variable "ecs_task_sg_id" {
@@ -324,7 +337,11 @@ locals {
   # a provider, or Slack. Stated here rather than left to src/core/config, whose fallback
   # is `https://${CLIENT}.ewake.ai` with our domain hardcoded: right by luck on saas, and
   # in byoc a URL on Ewake's domain that the customer does not own and DNS cannot resolve.
-  company_base_url = "https://${var.company.name}.${var.root_domain}"
+  # The one name this deployment answers on. Route53, the listener rule and every
+  # absolute URL below read this, so they cannot drift apart.
+  company_host = coalesce(var.company_host, "${var.company.name}.${var.root_domain}")
+
+  company_base_url = "https://${local.company_host}"
 
   tags = merge(var.common_tags, {
     Company = var.company.name

@@ -18,6 +18,23 @@ company = {
 root_domain    = "ewake.yourcompany.com"
 hosted_zone_id = "Z0123456789ABCDEFGHIJ"
 
+# Serve the dashboard at a name other than <company.name>.<root_domain> —
+# typically root_domain itself, when the delegated zone is already the name you
+# want. Optional; unset keeps the <company>.<root_domain> default.
+# company_host = "ewake.yourcompany.com"
+
+# If your hostname resolves from a private zone, or from a parent zone in an
+# account this deployment cannot write to, set hosted_zone_id = null and supply
+# your own certificate instead. You then own the A record and the certificate's
+# renewal. See README → "If you can't delegate a public zone".
+# hosted_zone_id      = null
+# acm_certificate_arn = "arn:aws:acm:eu-west-3:123456789012:certificate/..."
+
+# Only during a hostname cutover — serve the old and new names at once, then
+# empty both. See README → "Changing the hostname of a running deployment".
+# extra_certificate_arns = ["arn:aws:acm:eu-west-3:123456789012:certificate/..."]
+# alb_extra_host_headers = ["old.yourcompany.com"]
+
 # Two or more availability zones, all in aws_region.
 azs = ["eu-west-3a", "eu-west-3b"]
 

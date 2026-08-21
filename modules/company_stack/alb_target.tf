@@ -38,7 +38,9 @@ resource "aws_lb_listener_rule" "reactive" {
 
   condition {
     host_header {
-      values = ["${var.company.name}.${var.root_domain}"]
+      # company_host first so the common case reads plainly; the extras are a
+      # migration affordance and normally empty.
+      values = concat([local.company_host], var.extra_host_headers)
     }
   }
 }
