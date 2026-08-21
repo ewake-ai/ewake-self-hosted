@@ -69,6 +69,26 @@ variable "root_domain" {
 # Set them together: an internal ALB still needs the ingress rule narrowed, since
 # the security group is what actually refuses the packet — `internal` only removes
 # the public IPs.
+# Attaching to a customer-owned transit gateway is how a private deployment is
+# reached from their corporate network, and it replaces the SSM port-forward in
+# the README once it is up.
+variable "transit_gateway_id" {
+  description = "Transit gateway to attach this VPC to, e.g. a customer's org-level TGW shared into the account via RAM. Null (default) creates no attachment. The TGW must already be shared with this account; check `aws ec2 describe-transit-gateways` can see it before setting this."
+  type        = string
+  default     = null
+}
+
+variable "transit_gateway_routes" {
+  description = "CIDRs reached through var.transit_gateway_id, added to every private route table (e.g. [\"10.38.0.0/23\"] for a VPN range). Ignored when transit_gateway_id is null. Return traffic depends on the TGW's own route table propagating this VPC's CIDR, which is the TGW owner's side unless DefaultRouteTablePropagation is enabled."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = length(var.transit_gateway_routes) == 0 || var.transit_gateway_id != null
+    error_message = "transit_gateway_routes needs transit_gateway_id set; a route to no gateway cannot be created."
+  }
+}
+
 variable "alb_internal" {
   description = "Whether the tenant ALB is internal (private IPs, no public listener). Default false keeps the internet-facing shape. When true the ALB also moves to the private subnets, and the dashboard is reachable only from inside the VPC — over VPN, a peered network, or an SSM port-forward (see the README)."
   type        = bool
