@@ -27,7 +27,7 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = aws_acm_certificate_validation.this.certificate_arn
+  certificate_arn   = local.certificate_arn
 
   default_action {
     type = "fixed-response"
@@ -54,4 +54,15 @@ resource "aws_lb_listener" "http_redirect" {
       status_code = "HTTP_301"
     }
   }
+}
+
+# Extra SNI certificates, for serving an old and a new hostname at once during a
+# cutover. The listener's default certificate stays the one above; these are only
+# presented when the client's SNI matches. Routing is separate — see
+# var.alb_extra_host_headers.
+resource "aws_lb_listener_certificate" "extra" {
+  for_each = toset(var.extra_certificate_arns)
+
+  listener_arn    = aws_lb_listener.https.arn
+  certificate_arn = each.value
 }

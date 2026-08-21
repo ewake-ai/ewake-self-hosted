@@ -89,6 +89,85 @@ validation writes DNS records into this zone and blocks until they resolve
 dig +short NS ewake.yourcompany.com @8.8.8.8
 ```
 
+### If you can't delegate a public zone
+
+The section above assumes you can delegate a zone to this AWS account and
+that it resolves publicly. Not every organisation can. A common shape is a
+hostname that lives in a **private** hosted zone, or in a parent zone owned
+by a different team in a different account.
+
+ACM validates domain control over **public** DNS. It cannot see a private
+hosted zone, and it cannot see a zone whose parent has not delegated to it.
+Pointing `hosted_zone_id` at either one does not fail fast: certificate
+validation blocks for the full timeout and takes the dashboard with it,
+because the whole stack sits behind the HTTPS listener.
+
+If that is your situation, take DNS out of Terraform's hands entirely:
+
+```hcl
+hosted_zone_id      = null
+acm_certificate_arn = "arn:aws:acm:eu-west-3:...:certificate/..."
+company_host        = "ewake.yourcompany.com"
+```
+
+Terraform then creates no zone records and issues no certificate. You own
+two things, and **nothing in this stack will tell you if either lapses**:
+
+1. **The A record.** Point `company_host` at the `alb_dns_name` output,
+   wherever your resolution actually happens — a private hosted zone, an
+   internal resolver, your parent zone. With `alb_internal = true` the ALB
+   has private addresses, so a private zone is the natural home for it.
+2. **Certificate renewal.** Whatever DNS record proved control when the
+   certificate was issued has to stay in place: ACM re-reads it to renew,
+   roughly eleven months later. Deleting it breaks renewal silently.
+
+To issue that certificate, request it in the same region as the deployment
+and publish the validation record wherever your domain resolves publicly —
+this can be a flat CNAME in the parent zone; the name itself never has to be
+publicly resolvable, only the validation record:
+
+```sh
+aws acm request-certificate --region eu-west-3 \
+  --domain-name ewake.yourcompany.com --validation-method DNS \
+  --query CertificateArn --output text
+# then read the record to publish:
+aws acm describe-certificate --region eu-west-3 --certificate-arn "$ARN" \
+  --query 'Certificate.DomainValidationOptions[].ResourceRecord'
+```
+
+After apply, `terraform output dns_wiring` prints every value the edge
+depends on and which half is yours; `terraform output manual_dns_steps`
+lists what is still outstanding. Capture that output somewhere durable — it
+is the record of what the working configuration was.
+
+### Changing the hostname of a running deployment
+
+Do it in two applies, never one. The first is additive and safe; the second
+removes the old name once you have confirmed the new one works.
+
+**Apply 1** — serve both names. Leave `root_domain`, `hosted_zone_id` and
+`company_host` exactly as they are, and add:
+
+```hcl
+extra_certificate_arns = ["arn:...:certificate/<cert for the new name>"]
+alb_extra_host_headers = ["new.yourcompany.com"]
+```
+
+`extra_certificate_arns` makes the TLS handshake succeed on the new name;
+`alb_extra_host_headers` makes the request actually route. They are separate
+settings because they are separate failure modes — a certificate with no
+host header gives you a clean handshake followed by the listener's `404 no
+route`, which looks like a working migration until someone tries it.
+
+**Apply 2** — once the new name loads, move `company_host`, `root_domain`
+and `hosted_zone_id`/`acm_certificate_arn` over and empty both extra lists.
+This one destroys the old certificate and A record, and replaces the reactive
+task definition, since the dashboard URL is baked into its environment.
+
+Don't collapse the two. If Terraform manages the old certificate, an apply
+that both drops it and still needs it on the listener fails on
+`ResourceInUseException`.
+
 ### DLM role (if your account already has one)
 
 If your account has ever used AWS Data Lifecycle Manager — even an

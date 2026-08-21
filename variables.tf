@@ -61,8 +61,43 @@ variable "company" {
 }
 
 variable "root_domain" {
-  description = "Public root domain the customer owns and delegates to Route53 in this AWS account. The reactive dashboard is served at <company.name>.<root_domain>."
+  description = "Public root domain the customer owns and delegates to Route53 in this AWS account. The reactive dashboard is served at var.company_host, which defaults to <company.name>.<root_domain>."
   type        = string
+}
+
+variable "company_host" {
+  description = <<-EOT
+    Fully-qualified host the dashboard is served on. Defaults to
+    <company.name>.<root_domain> — the shape saas uses, and what every existing
+    deployment already has, so leaving it unset is a no-op.
+
+    Set it to var.root_domain to serve the zone apex instead. That is the byoc
+    case where the customer delegates a subdomain of a domain they own (e.g.
+    ewake.qonto.co) and wants to be reached at exactly that name, with no
+    further prefix in front of it.
+
+    Constrained to root_domain or a single label under it because acm.tf issues
+    one cert for root_domain + *.root_domain, and a wildcard matches one label
+    only: a.b.root_domain would resolve and then fail the TLS handshake.
+  EOT
+  type        = string
+  default     = null
+
+  validation {
+    # Only binding while acm.tf issues the cert. A customer-supplied certificate
+    # carries whatever names they put on it, so the wildcard's one-label reach
+    # stops being our constraint to enforce.
+    condition = (
+      var.acm_certificate_arn != null ||
+      var.company_host == null ||
+      var.company_host == var.root_domain ||
+      (
+        endswith(var.company_host, ".${var.root_domain}") &&
+        !strcontains(trimsuffix(var.company_host, ".${var.root_domain}"), ".")
+      )
+    )
+    error_message = "company_host must be root_domain itself or exactly one label under it; the ACM cert covers only root_domain and *.root_domain. Set acm_certificate_arn to bring your own certificate instead."
+  }
 }
 
 # Both default to today's public shape, so an existing deployment sees no diff.
@@ -107,8 +142,71 @@ variable "alb_ingress_cidrs" {
 }
 
 variable "hosted_zone_id" {
-  description = "Route53 hosted zone ID for var.root_domain. Must exist before apply — Terraform creates the ACM cert with DNS validation records here."
+  description = <<-EOT
+    Route53 hosted zone for var.root_domain, in this account. Terraform writes
+    the ACM validation records and the dashboard's A alias here, so the zone must
+    exist before apply and be reachable from the public internet — ACM resolves
+    validation over public DNS and cannot see a private hosted zone.
+
+    Null hands DNS back to the customer: no zone is touched and no A record is
+    created. That is the shape for an organisation whose hostname lives in a
+    private zone, or in a parent zone in an account we have no access to. It
+    requires acm_certificate_arn, since without a writable public zone Terraform
+    has nowhere to prove domain control. After apply, point the hostname at the
+    `alb_dns_name` output; `dns_wiring` prints exactly what to create.
+  EOT
   type        = string
+  default     = null
+}
+
+variable "acm_certificate_arn" {
+  description = <<-EOT
+    Existing ACM certificate for var.company_host, in var.aws_region. Null
+    (default) makes acm.tf issue and DNS-validate one in var.hosted_zone_id,
+    which is what every deployment that delegates a zone to us should do —
+    renewal is then automatic and nobody has to remember a record.
+
+    Set it when the customer owns DNS: they issue the certificate (or import
+    one from their own CA) and hand us the ARN. Two things become theirs to
+    keep alive — the certificate's renewal validation record, and the A record
+    for company_host. Neither failure is visible from this stack.
+
+    The certificate must cover var.company_host exactly; a wildcard reaches one
+    label only, so a cert for *.example.com does not serve a.b.example.com.
+  EOT
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.acm_certificate_arn != null || var.hosted_zone_id != null
+    error_message = "Set hosted_zone_id (so Terraform can issue and validate a certificate) or acm_certificate_arn (to supply your own). With neither, the HTTPS listener has no certificate and there is no way to obtain one."
+  }
+
+  validation {
+    condition     = var.acm_certificate_arn == null || can(regex("^arn:aws[a-z-]*:acm:", var.acm_certificate_arn))
+    error_message = "acm_certificate_arn must be an ACM certificate ARN. An IAM server certificate or a bare certificate ID will not attach to the listener."
+  }
+}
+
+variable "extra_certificate_arns" {
+  description = <<-EOT
+    Additional ACM certificates attached to the HTTPS listener as SNI
+    certificates, beyond the default one. Empty (default) is the normal shape.
+
+    This exists for hostname cutovers: serve the old name and the new one at the
+    same time, move traffic, then drop the old entry. Attaching a certificate
+    here does not route anything — the listener rule matches var.company_host,
+    so a request arriving on one of these names completes the TLS handshake and
+    then gets the listener's 404. Pair it with alb_extra_host_headers.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
+variable "alb_extra_host_headers" {
+  description = "Extra Host values routed to the dashboard alongside var.company_host. Empty (default) matches company_host only. Set during a hostname migration so both names serve, and remember each one also needs a certificate the listener can present — see extra_certificate_arns."
+  type        = list(string)
+  default     = []
 }
 
 variable "ewake_aws_account_id" {
@@ -233,6 +331,17 @@ locals {
 
   # Falls back to release_channel so the default install still tracks a channel.
   app_image_tag = coalesce(var.app_image_tag, var.release_channel)
+
+  # Resolved once here and passed down, so the root output and the module cannot
+  # disagree about which name this deployment answers on.
+  company_host = coalesce(var.company_host, "${var.company.name}.${var.root_domain}")
+
+  # The two halves of the edge are owned independently. A customer can hand us a
+  # zone and no cert, a cert and no zone, both, or — the common case — just the
+  # zone. Everything downstream reads these rather than re-deriving the test.
+  manage_dns         = var.hosted_zone_id != null
+  manage_certificate = var.acm_certificate_arn == null
+  certificate_arn    = local.manage_certificate ? aws_acm_certificate_validation.this[0].certificate_arn : var.acm_certificate_arn
 
   # Every Ewake image lives in Ewake's account. Constructed here (not via
   # terraform_remote_state) because a byoc root cannot read Ewake's state.

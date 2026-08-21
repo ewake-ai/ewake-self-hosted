@@ -11,9 +11,11 @@ module "company" {
   deployment_mode                = "byoc"
   tenant_name                    = var.tenant_name
   root_domain                    = var.root_domain
+  company_host                   = local.company_host
   orchestrator_url               = null
   admin_notify_url               = null
   hosted_zone_id                 = var.hosted_zone_id
+  extra_host_headers             = var.alb_extra_host_headers
   aws_region                     = var.aws_region
   common_tags                    = local.common_tags
   vpc_id                         = aws_vpc.this.id
