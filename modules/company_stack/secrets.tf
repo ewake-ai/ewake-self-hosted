@@ -61,10 +61,20 @@ resource "random_password" "orchestrator_secret" {
   override_special = "!#$%^&*()-_=+[]{}<>?"
 }
 
+# The password signed in with where there is no SSO connector. sso_connectors defaults to [],
+# and this repo has no static-password fallback of its own, so without this a connectorless
+# deployment comes up with no login path at all. The seed step in db_migrate.tf hashes it; the
+# plaintext lives only here, for an operator to read out of Secrets Manager. No special
+# characters: it gets pasted into a shell and then a form.
+resource "random_password" "admin_password" {
+  length  = 32
+  special = false
+}
+
 resource "aws_secretsmanager_secret" "app" {
   count       = local.is_byoc ? 1 : 0
   name        = "${local.ssm_path}/app"
-  description = "Per-company application secrets (JWT_SECRET, DEX_CLIENT_SECRET, ...) for standalone (byoc) deployments."
+  description = "Per-company application secrets: ADMIN_PASSWORD, JWT_SECRET, DEX_CLIENT_SECRET, ORCHESTRATOR_SECRET."
   tags        = local.tags
 }
 
@@ -74,6 +84,7 @@ resource "aws_secretsmanager_secret_version" "app" {
   count     = local.is_byoc ? 1 : 0
   secret_id = aws_secretsmanager_secret.app[0].id
   secret_string = jsonencode({
+    ADMIN_PASSWORD      = random_password.admin_password.result
     JWT_SECRET          = random_password.jwt_secret[0].result
     DEX_CLIENT_SECRET   = random_password.dex_client_secret[0].result
     ORCHESTRATOR_SECRET = random_password.orchestrator_secret[0].result
