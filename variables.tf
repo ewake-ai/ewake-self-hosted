@@ -11,8 +11,8 @@ variable "aws_region" {
   }
 }
 
-# The customer's own "tenant" identity — used in resource names, log prefixes and
-# the pointer key under s3://ewake-frontend-artifacts/pointers/<tenant>/... Kept
+# The customer's own "tenant" identity — used in resource names and log prefixes.
+# Kept
 # distinct from `company.name` because the SaaS shape has one tenant to many
 # companies; in byoc they usually collapse (tenant_name == company.name), but the
 # separation stays so ARN prefixes look the same as SaaS and code that reads them
@@ -220,14 +220,8 @@ variable "ewake_aws_account_id" {
   }
 }
 
-variable "ewake_frontend_artifacts_bucket_name" {
-  description = "Name of the Ewake-owned S3 bucket holding frontend static exports. Cross-account read is granted by terraform/shared/byoc_customers.tf (aws_s3_bucket_policy). Defaults to the well-known name — override only if Ewake has told you a different one."
-  type        = string
-  default     = "ewake-frontend-artifacts"
-}
-
 variable "release_channel" {
-  description = "Which Ewake release stream this deployment tracks: 'stable' (default; released images) or 'latest' (main-merge, dogfood). Selects the frontend channel pointer (channels/<name>.json) and the Lambda image tags. Also the default tag for reactive and db-migrate, unless app_image_tag overrides those."
+  description = "Which Ewake release stream the Lambda images follow: 'stable' (default; released images) or 'latest' (main-merge, dogfood). Reactive and db-migrate are not affected — they run app_image_tag, which is required."
   type        = string
   default     = "stable"
 
@@ -237,21 +231,11 @@ variable "release_channel" {
   }
 }
 
-# release_channel is overloaded: it is simultaneously the ECR tag for every Ewake
-# image AND the name of the frontend channel pointer the app reads
-# (channels/<name>.json in the artifacts bucket). Only latest, main and stable exist
-# as channels, so setting release_channel to a version or commit tag resolves no
-# channel — the dashboard falls back to last-known-good, or 503s on a cold task —
-# and nothing fails at plan time to tell you. Its validation blocks that today.
-#
-# This variable is the way to run a specific build without touching the channel:
-# release_channel keeps selecting the frontend, app_image_tag pins the containers.
-#
-# Covers reactive and db-migrate together, deliberately. db-migrate applies the
-# schema the running reactive image expects, so pinning one and not the other boots
-# a container against migrations it does not have. Lambda images are NOT covered —
-# they follow release_channel, because they version independently of a reactive build
-# and their tags do not exist for every commit.
+# Lambda images only, since the dashboard stopped being served from S3: the reactive
+# image now carries its own frontend, so there is no channel pointer to resolve and
+# no artifacts bucket to read. Lambda tags do not exist for every commit, which is
+# why they still follow a channel rather than app_image_tag.
+
 variable "app_image_tag" {
   description = "Immutable ECR tag the reactive service and its db-migrate task run, e.g. \"ewake-v0.153.0\". Required: a deployment must state which build it runs. Does not affect the Lambda images, which follow release_channel."
   type        = string

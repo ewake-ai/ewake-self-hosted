@@ -36,7 +36,6 @@ module "company" {
   datadog_api_key_secret_arn     = null
   datadog_pg_secret_arn          = null
   ecr_repository_urls            = local.ecr_repository_urls
-  frontend_artifacts_bucket      = var.ewake_frontend_artifacts_bucket_name
   release_channel                = var.release_channel
   reactive_service_image_uri     = "${local.ecr_repository_urls["reactive"]}:${local.app_image_tag}"
   # The service image, not ewake-db-migrate: one build serves and migrates, so app_image_tag
