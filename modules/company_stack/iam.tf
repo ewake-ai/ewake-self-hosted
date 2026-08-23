@@ -125,36 +125,6 @@ data "aws_iam_policy_document" "task" {
     }
   }
 
-  # builds/assets/channels are shared; the pointer is company-owned — never a sibling's.
-  statement {
-    sid     = "FrontendArtifactsReadScopedToCompany"
-    actions = ["s3:GetObject"]
-    resources = [
-      "arn:aws:s3:::${var.frontend_artifacts_bucket}/assets/*",
-      "arn:aws:s3:::${var.frontend_artifacts_bucket}/builds/*",
-      "arn:aws:s3:::${var.frontend_artifacts_bucket}/channels/*",
-      "arn:aws:s3:::${var.frontend_artifacts_bucket}/pointers/${var.tenant_name}/${var.company.name}.json"
-    ]
-  }
-
-  # Prefix-scoped ListBucket turns missing keys into NoSuchKey, not AccessDenied — 404 vs misconfig.
-  statement {
-    sid       = "FrontendArtifactsListScopedToCompany"
-    actions   = ["s3:ListBucket"]
-    resources = ["arn:aws:s3:::${var.frontend_artifacts_bucket}"]
-
-    condition {
-      test     = "StringLike"
-      variable = "s3:prefix"
-      values = [
-        "assets/*",
-        "builds/*",
-        "channels/*",
-        "pointers/${var.tenant_name}/${var.company.name}.json"
-      ]
-    }
-  }
-
   statement {
     sid       = "ECRReadOnly"
     actions   = ["ecr:GetAuthorizationToken", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecr:BatchCheckLayerAvailability"]

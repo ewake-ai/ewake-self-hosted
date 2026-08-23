@@ -116,8 +116,6 @@ resource "aws_ecs_task_definition" "reactive" {
         ], local.log_clustering_sidecar_enabled ? [
         { name = "LOG_CLUSTERING_SIDECAR_URL", value = local.log_clustering_sidecar_url },
         ] : [], [
-        { name = "FRONTEND_ARTIFACTS_BUCKET", value = var.frontend_artifacts_bucket },
-        { name = "FRONTEND_ARTIFACTS_REGION", value = var.frontend_artifacts_region },
         { name = "FRONTEND_CHANNEL", value = var.release_channel },
         # Dashboard API — low usage, and its ceiling doubles during a rolling
         # deploy. Budget lives in src/core/db.

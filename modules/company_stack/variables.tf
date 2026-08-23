@@ -243,19 +243,8 @@ variable "ecr_repository_urls" {
   type = map(string)
 }
 
-variable "frontend_artifacts_bucket" {
-  description = "Shared S3 bucket holding frontend static exports and version pointers (terraform/shared/frontend_artifacts.tf). Injected as FRONTEND_ARTIFACTS_BUCKET; the task role gets read access scoped to this company's pointer."
-  type        = string
-}
-
-variable "frontend_artifacts_region" {
-  description = "Region the frontend artifacts bucket lives in — Ewake's, not the deployment's, so it is deliberately not aws_region. Only differs if the bucket moves."
-  type        = string
-  default     = "eu-west-3"
-}
-
 variable "release_channel" {
-  description = "Build stream this company falls back to before it has a per-company frontend pointer: 'latest' (dogfood, follows main merges) or 'stable' (follows releases). Spelled the same as the ECR tag, so the caller uses it verbatim for reactive_service_image_uri and lambda_image_uris and a first boot cannot pair a stable frontend with a dogfood backend."
+  description = "Build stream the Lambda images follow: 'latest' (dogfood, follows main merges) or 'stable' (follows releases). Spelled the same as the ECR tag, so the caller uses it verbatim for lambda_image_uris. The reactive and db-migrate containers do not use it — they take app_image_tag."
   type        = string
   default     = "stable"
 
