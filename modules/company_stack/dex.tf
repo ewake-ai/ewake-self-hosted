@@ -5,8 +5,14 @@
 # task. Dex binds loopback in the shared network namespace and reactive proxies /dex to
 # it, which is also the URL its issuer claims.
 #
-# Unconditional, with no feature flag — after this it is the only way anyone logs in,
-# so a per-company toggle would only encode a broken state.
+# Present exactly when the company has a connector. It used to be unconditional, on the
+# grounds that SSO was the only way anyone logs in and a connectorless company was simply
+# broken — password login is what makes that a valid state instead. Dex refuses to start on
+# an empty connector list, and restartPolicy below retries it forever, so leaving it mounted
+# costs a permanent crash loop and a log group full of its failures.
+#
+# Not a per-company feature toggle: it tracks sso_connectors, the same value reactive gates
+# its password endpoint on, so the two cannot disagree about which login a deployment gets.
 
 locals {
   # The origin the BROWSER drives the OIDC hops against, and what a provider's redirect URI
@@ -41,7 +47,7 @@ locals {
   # saas reads the dedicated vendor secret, the same shape jwt.tf and google.tf use.
   dex_client_secret_value_from = local.is_byoc ? "${one(aws_secretsmanager_secret.app[*].arn)}:DEX_CLIENT_SECRET::" : "${var.dex_secret_arn}:SECRET::"
 
-  dex_containers = [{
+  dex_containers = length(var.company.sso_connectors) > 0 ? [{
     name  = "dex"
     image = "${var.ecr_repository_urls["dex-sidecar"]}:latest"
     # Dex being down breaks new logins but not the dashboard for anyone already holding
@@ -94,7 +100,7 @@ locals {
         awslogs-stream-prefix = "dex"
       }
     }
-  }]
+  }] : []
 }
 
 # The connectors this company can log in with: a JSON array of complete Dex connector
