@@ -253,18 +253,26 @@ variable "release_channel" {
 # they follow release_channel, because they version independently of a reactive build
 # and their tags do not exist for every commit.
 variable "app_image_tag" {
-  description = "Pins the reactive service and its db-migrate task to a specific ECR tag (e.g. \"ewake-v0.145.0\" or \"sha-1a2b3c4d\"). Leave null to follow release_channel. Does not affect the frontend channel or the Lambda images."
+  description = "Immutable ECR tag the reactive service and its db-migrate task run, e.g. \"ewake-v0.153.0\". Required: a deployment must state which build it runs. Does not affect the Lambda images, which follow release_channel."
   type        = string
-  default     = null
-  nullable    = true
+  nullable    = false
 
-  # Empty string is rejected rather than tolerated. coalesce() already skips it and
-  # falls through to release_channel, so an accidental "" — a CI variable that did
-  # not expand, say — would silently deploy the channel instead of the pin the
-  # operator thought they had set. Null is the way to say "follow the channel".
+  # Required, and a channel name is refused. Both rules exist for the same reason:
+  # nothing migrates a byoc database except an apply from this repo, and the image
+  # refuses to serve a schema behind it (assertSchemaIsCurrent). Following a mutable
+  # channel therefore means a release retagging it turns the NEXT task replacement —
+  # a deploy, a scale event, a Fargate host retirement — into an outage at a moment
+  # nobody chose, with no migration having run. Naming a version instead makes the
+  # upgrade an act: bump this, plan, apply. reactive_deploy depends_on db_migrate,
+  # so the migration always lands before the new image serves.
   validation {
-    condition     = var.app_image_tag == null || trimspace(coalesce(var.app_image_tag, " ")) != ""
-    error_message = "app_image_tag must be null (follow release_channel) or a non-empty tag; an empty string is almost always an unexpanded variable."
+    condition     = !contains(["stable", "latest", "main"], var.app_image_tag)
+    error_message = "app_image_tag must name a specific build (e.g. \"ewake-v0.153.0\"), not a channel. A channel tag moves under a running deployment and nothing here would migrate the database to match it."
+  }
+
+  validation {
+    condition     = trimspace(var.app_image_tag) != ""
+    error_message = "app_image_tag must not be empty; an empty string is almost always an unexpanded variable."
   }
 }
 
@@ -330,7 +338,9 @@ locals {
   }
 
   # Falls back to release_channel so the default install still tracks a channel.
-  app_image_tag = coalesce(var.app_image_tag, var.release_channel)
+  # No coalesce onto release_channel: app_image_tag is required and refuses a channel name,
+  # so there is nothing to fall back to. release_channel still selects the Lambda images.
+  app_image_tag = var.app_image_tag
 
   # Resolved once here and passed down, so the root output and the module cannot
   # disagree about which name this deployment answers on.

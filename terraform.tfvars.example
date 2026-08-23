@@ -9,11 +9,23 @@ company = {
   public_id = "yourcompany"
   domain    = "yourcompany.com"
 
-  # SSO providers for login. At least one is required.
-  # Register redirect URI: https://<name>.<root_domain>/sso/callback
-  # Then write the connector JSON to Secrets Manager — see README.
+  # SSO providers for login. Register the redirect URI
+  # https://<name>.<root_domain>/sso/callback with each, then write the connector
+  # JSON to Secrets Manager — see README.
+  #
+  # Empty is valid and is the right choice before you have picked an IdP: the
+  # deployment then serves a username/password form instead, and terraform
+  # generates the admin password into ewake/<tenant>/<company>/app under
+  # ADMIN_PASSWORD for you to read out of Secrets Manager. Dex is not mounted at
+  # all in that case. Adding a connector later switches login over.
   sso_connectors = ["google"]
 }
+
+# The build this deployment runs. Required, and a channel name ("stable",
+# "latest") is refused: nothing migrates this database except an apply from this
+# repo, and the image refuses to serve a schema behind it, so a tag that moves
+# under you turns the next task replacement into an outage. Bump this to upgrade.
+app_image_tag = "ewake-v0.153.0"
 
 root_domain    = "ewake.yourcompany.com"
 hosted_zone_id = "Z0123456789ABCDEFGHIJ"
@@ -38,14 +50,24 @@ hosted_zone_id = "Z0123456789ABCDEFGHIJ"
 # Two or more availability zones, all in aws_region.
 azs = ["eu-west-3a", "eu-west-3b"]
 
+# Reach the dashboard from your own network instead of the public internet.
+# Attaches this VPC to a transit gateway already shared with this account — an
+# org-level TGW shared via RAM, typically. Check `aws ec2 describe-transit-gateways`
+# can see it before setting this. transit_gateway_routes are the CIDRs reached
+# through it (a VPN range, say), added to every private route table; return
+# traffic needs the TGW's own route table to propagate this VPC's CIDR, which is
+# the TGW owner's side unless DefaultRouteTablePropagation is on.
+# transit_gateway_id     = "tgw-0123456789abcdef0"
+# transit_gateway_routes = ["10.38.0.0/23"]
+
 # Optional overrides (defaults shown):
-# release_channel    = "stable"
+# release_channel    = "stable"   # selects the Lambda images only
 #
 # Private deployment: no public ingress, dashboard reached over VPN, a peered
 # network, or an SSM port-forward. Set both — `internal` removes the public IPs,
 # the CIDR list is what actually refuses a packet. See README → Private deployments.
 # alb_internal       = true
-# alb_ingress_cidrs  = ["10.10.0.0/16"]
+# alb_ingress_cidrs  = ["10.10.0.0/16", "10.38.0.0/23"]
 # vpc_cidr           = "10.10.0.0/16"
 # rds_instance_class = "db.t4g.small"
 # rds_storage_gb     = 50
