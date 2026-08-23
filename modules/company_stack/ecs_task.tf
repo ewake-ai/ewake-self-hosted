@@ -116,7 +116,6 @@ resource "aws_ecs_task_definition" "reactive" {
         ], local.log_clustering_sidecar_enabled ? [
         { name = "LOG_CLUSTERING_SIDECAR_URL", value = local.log_clustering_sidecar_url },
         ] : [], [
-        { name = "FRONTEND_CHANNEL", value = var.release_channel },
         # Dashboard API — low usage, and its ceiling doubles during a rolling
         # deploy. Budget lives in src/core/db.
         { name = "POSTGRES_POOL_MAX", value = "3" },

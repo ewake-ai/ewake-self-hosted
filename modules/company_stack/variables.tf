@@ -243,17 +243,6 @@ variable "ecr_repository_urls" {
   type = map(string)
 }
 
-variable "release_channel" {
-  description = "Build stream the Lambda images follow: 'latest' (dogfood, follows main merges) or 'stable' (follows releases). Spelled the same as the ECR tag, so the caller uses it verbatim for lambda_image_uris. The reactive and db-migrate containers do not use it — they take app_image_tag."
-  type        = string
-  default     = "stable"
-
-  validation {
-    condition     = contains(["latest", "stable"], var.release_channel)
-    error_message = "release_channel must be 'latest' or 'stable'."
-  }
-}
-
 variable "reactive_service_image_uri" {
   description = "Fully-qualified image for the reactive ECS service, tagged with this tenant's channel. Distinct from lambdas/variables.tf's reactive_image_uri, which is the reactive Lambda. Only a brand-new company ever boots on it — CI owns the tag from the first deploy on."
   type        = string

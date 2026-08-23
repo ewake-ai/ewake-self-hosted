@@ -321,7 +321,6 @@ locals {
     Deployment = "byoc"
   }
 
-  # Falls back to release_channel so the default install still tracks a channel.
   # No coalesce onto release_channel: app_image_tag is required and refuses a channel name,
   # so there is nothing to fall back to. release_channel still selects the Lambda images.
   app_image_tag = var.app_image_tag
