@@ -241,11 +241,30 @@ Set them **together**. `alb_internal` moves the load balancer to the private
 subnets and drops its public IPs; `alb_ingress_cidrs` is what actually refuses a
 packet. Either alone leaves a gap.
 
-You still need a real, publicly-delegated `hosted_zone_id`. ACM validates by
-reading a DNS record, never by connecting to the load balancer, so a private ALB
-and a public zone are not in conflict — and without a validating certificate the
-apply cannot create the HTTPS listener that the rest of the stack depends on.
-The dashboard's DNS record simply resolves to private addresses.
+**Decide `alb_internal` before your first apply.** A load balancer's scheme is
+immutable in AWS, so changing it later does not reconfigure the ALB — Terraform
+destroys and recreates it, and the listeners, the listener rule and the reactive
+task definition go with it. The replacement comes back with a **new DNS name and a
+new hosted-zone ID**. If Terraform owns your record it updates it for you; if you
+own it (`hosted_zone_id = null`) your hostname points at a load balancer that no
+longer exists until you repoint it by hand, and `terraform output dns_wiring` is
+where the new target comes from.
+
+`alb_ingress_cidrs` has none of that cost — it is security-group rules, changeable
+in place at any time. Tightening or widening who can reach an existing deployment
+is always cheap; changing whether it is public is not.
+
+A private ALB does not require a private DNS story. If you *can* delegate a public
+zone, keep `hosted_zone_id` set: ACM validates by reading a DNS record, never by
+connecting to the load balancer, so a private ALB and a public zone are not in
+conflict, and the dashboard's record simply resolves to private addresses.
+
+If you cannot, set `hosted_zone_id = null` and supply your own certificate — see
+[If you can't delegate a public zone](#if-you-cant-delegate-a-public-zone). That
+combination (internal ALB, customer-owned record in a private zone, customer-issued
+certificate) is a supported shape and is what at least one production deployment
+runs. Either way you need a certificate before the apply can create the HTTPS
+listener the rest of the stack sits behind.
 
 #### Reaching a private dashboard
 
