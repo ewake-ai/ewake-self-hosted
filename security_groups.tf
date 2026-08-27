@@ -18,7 +18,7 @@ resource "aws_security_group" "alb" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = var.alb_ingress_cidrs
+    cidr_blocks = local.alb_ingress_cidrs
   }
 
   # Serves only the 301 to 443 (alb.tf's http_redirect). Kept on the same CIDR list
@@ -27,7 +27,7 @@ resource "aws_security_group" "alb" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = var.alb_ingress_cidrs
+    cidr_blocks = local.alb_ingress_cidrs
   }
 
   egress {
