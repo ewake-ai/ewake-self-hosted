@@ -242,13 +242,41 @@ subnets and drops its public IPs; `alb_ingress_cidrs` is what actually refuses a
 packet. Either alone leaves a gap.
 
 **Decide `alb_internal` before your first apply.** A load balancer's scheme is
-immutable in AWS, so changing it later does not reconfigure the ALB — Terraform
-destroys and recreates it, and the listeners, the listener rule and the reactive
-task definition go with it. The replacement comes back with a **new DNS name and a
-new hosted-zone ID**. If Terraform owns your record it updates it for you; if you
-own it (`hosted_zone_id = null`) your hostname points at a load balancer that no
-longer exists until you repoint it by hand, and `terraform output dns_wiring` is
-where the new target comes from.
+immutable in AWS, and this one cannot be changed in place afterwards — not
+disruptively, but *not at all*. Terraform destroys the listeners, then fails to
+create the replacement because the old load balancer still holds the name:
+
+```
+Error: ELBv2 Load Balancer (<tenant>-tenant-alb) already exists
+```
+
+That leaves the deployment **down, mid-apply**: no listeners, and no new load
+balancer. The name collides because the replacement is created before the old one
+is removed, which the ECS service and target group require of everything they
+depend on.
+
+Recovering means deleting the load balancer yourself, between two applies:
+
+```sh
+aws elbv2 delete-load-balancer --load-balancer-arn \
+  $(aws elbv2 describe-load-balancers --names <tenant>-tenant-alb \
+      --query 'LoadBalancers[0].LoadBalancerArn' --output text)
+terraform apply
+```
+
+Do not reach for `terraform destroy -target=aws_lb.this` instead — it cascades into
+the whole company module, including the Neo4j volume, and stops on its
+`prevent_destroy` guard having already planned the rest.
+
+The replacement comes back with a **new DNS name and a new hosted-zone ID**. If
+Terraform owns your record it updates it for you; if you own it
+(`hosted_zone_id = null`) your hostname points at a load balancer that no longer
+exists until you repoint it by hand, and `terraform output dns_wiring` is where the
+new target comes from.
+
+So treat the scheme as part of the deployment's shape, chosen once. If you expect
+to need both at different times, start public and narrow `alb_ingress_cidrs`
+instead — that list is editable in place, with no replacement and no outage.
 
 #### Inbound webhooks on a private deployment
 
