@@ -78,3 +78,8 @@ output "rds_endpoint" {
   description = "RDS Postgres endpoint. Not publicly reachable — provided for operator diagnostics via aws ecs execute-command."
   value       = aws_db_instance.this.address
 }
+
+output "public_inbound_url" {
+  description = "The public entry point Slack and Datadog are registered against, when public_inbound_gateway is on. Null otherwise, and the company host serves those paths itself."
+  value       = local.gateway_base_url
+}

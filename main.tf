@@ -7,12 +7,13 @@ module "company" {
 
   company = var.company
 
-  project_name                   = "ewake"
-  deployment_mode                = "byoc"
-  tenant_name                    = var.tenant_name
-  root_domain                    = var.root_domain
-  company_host                   = local.company_host
-  public_inbound_base_url        = var.public_inbound_base_url
+  project_name    = "ewake"
+  deployment_mode = "byoc"
+  tenant_name     = var.tenant_name
+  root_domain     = var.root_domain
+  company_host    = local.company_host
+  # null falls through to the module's own default, the company host.
+  public_inbound_base_url        = try(coalesce(var.public_inbound_base_url, local.gateway_base_url), null)
   orchestrator_url               = null
   admin_notify_url               = null
   hosted_zone_id                 = var.hosted_zone_id

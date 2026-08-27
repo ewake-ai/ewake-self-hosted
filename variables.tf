@@ -390,3 +390,26 @@ variable "public_inbound_base_url" {
     error_message = "public_inbound_base_url must be an https:// URL; Slack and Datadog refuse to deliver to anything else."
   }
 }
+
+variable "public_inbound_gateway" {
+  description = <<-EOT
+    Put a public API Gateway in front of the private ALB so inbound webhooks can
+    reach this deployment.
+
+    Only meaningful with alb_internal = true; a public ALB already answers these
+    paths itself. Slack and Datadog cannot route to an internal load balancer, so
+    without this their integrations install cleanly and then never deliver.
+
+    Four paths are routed and nothing else: the two Slack callbacks, the Datadog
+    webhook, and the icon Slack fetches to render a message block. The dashboard,
+    the API and SSO stay unreachable from the internet.
+
+    Requests are authenticated by the caller, not by the network: Slack signs
+    every request and the deployment verifies the signature against a five-minute
+    replay window, and the Datadog webhook carries a per-integration token in its
+    path. Set public_inbound_base_url instead if you already run your own entry
+    point and would rather keep it.
+  EOT
+  type        = bool
+  default     = false
+}
