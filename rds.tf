@@ -7,11 +7,14 @@ resource "aws_db_subnet_group" "this" {
   # because RDS refuses to drop a subnet its instance sits in. The group is
   # replaced instead, which needs a free name at the moment of creation.
   #
-  # Deliberately NOT create_before_destroy. CBD propagates to dependents, and
-  # aws_db_instance below carries a fixed `identifier` — so the database would be
-  # planned create-before-destroy and fail with DBInstanceAlreadyExists. Plain
-  # replacement gives the only order AWS accepts: drop the instance, drop the
-  # group, recreate both.
+  # Deliberately NOT create_before_destroy — it would not help. CBD propagates to a
+  # resource's *dependencies*, and aws_ecs_service already carries it, so the whole
+  # chain below it is create-before-destroy already: service -> task definition ->
+  # aws_db_instance (its POSTGRES_HOST) -> this group -> the subnets. That is why a
+  # subnet_cidr move plans the database create-before-destroy and fails with
+  # DBInstanceAlreadyExists on its fixed `identifier`, and why the Neo4j volume
+  # hits VolumeInUse on the same apply. Neither is fixable here; both are pre-steps
+  # in the README's subnet_cidr runbook.
   name_prefix = "${var.tenant_name}-"
   subnet_ids  = aws_subnet.private[*].id
 

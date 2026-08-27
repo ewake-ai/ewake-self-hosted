@@ -29,6 +29,7 @@ module "company" {
   alb_listener_arn               = aws_lb_listener.https.arn
   ecs_task_sg_id                 = aws_security_group.ecs_task.id
   rds_endpoint                   = aws_db_instance.this.address
+  rds_resource_id                = aws_db_instance.this.resource_id
   rds_port                       = aws_db_instance.this.port
   rds_master_secret_arn          = aws_secretsmanager_secret.rds_master.arn
   bootstrap_lambda_function_name = aws_lambda_function.bootstrap.function_name
