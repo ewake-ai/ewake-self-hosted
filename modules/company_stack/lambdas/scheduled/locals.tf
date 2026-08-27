@@ -26,7 +26,7 @@ locals {
     # and lands in Datadog as an error-status log. Suppress until the dependency chain drops it.
     NODE_OPTIONS      = "--enable-source-maps --disable-warning=DEP0040"
     CLIENT            = var.company.name
-    TENANT            = terraform.workspace
+    TENANT            = var.tenant_name
     POSTGRES_HOST     = var.rds_endpoint
     POSTGRES_PORT     = tostring(var.rds_port)
     POSTGRES_DB       = var.company.public_id

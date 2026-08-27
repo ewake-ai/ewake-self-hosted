@@ -176,3 +176,12 @@ variable "sso_base_url" {
   description = "The origin the browser drives the OIDC hops against. Not read by these functions; required at config import."
   type        = string
 }
+
+# Half of the Secrets Manager path every integration credential is written under,
+# ewake/<TENANT>/<CLIENT>/integrations/... . Passed in rather than read from
+# terraform.workspace: byoc has no workspaces, so the workspace is the literal
+# "default" and these functions looked under a prefix nothing writes to and
+# iam.tf does not grant.
+variable "tenant_name" {
+  type = string
+}
