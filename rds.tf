@@ -3,8 +3,17 @@
 # Ewake's Datadog org, which a customer deployment must not do.
 
 resource "aws_db_subnet_group" "this" {
-  name       = var.tenant_name
-  subnet_ids = aws_subnet.private[*].id
+  # name_prefix, not name: a subnet_cidr move cannot update this group in place,
+  # because RDS refuses to drop a subnet its instance sits in. The group is
+  # replaced instead, which needs a free name at the moment of creation.
+  #
+  # Deliberately NOT create_before_destroy. CBD propagates to dependents, and
+  # aws_db_instance below carries a fixed `identifier` — so the database would be
+  # planned create-before-destroy and fail with DBInstanceAlreadyExists. Plain
+  # replacement gives the only order AWS accepts: drop the instance, drop the
+  # group, recreate both.
+  name_prefix = "${var.tenant_name}-"
+  subnet_ids  = aws_subnet.private[*].id
 
   tags = {
     Name = var.tenant_name
@@ -50,7 +59,7 @@ resource "aws_db_instance" "this" {
   username                    = "postgres"
   password                    = random_password.rds_master.result
   backup_retention_period     = 7
-  deletion_protection         = true
+  deletion_protection         = var.rds_deletion_protection
   apply_immediately           = false
   publicly_accessible         = false
   skip_final_snapshot         = false

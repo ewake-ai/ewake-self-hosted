@@ -301,6 +301,15 @@ variable "subnet_cidr" {
   }
 }
 
+# AWS will not move a DB instance between subnet groups inside one VPC
+# (InvalidVPCNetworkStateFault), so a subnet_cidr move recreates it from a
+# snapshot rather than relocating it — which needs this off for one apply.
+variable "rds_deletion_protection" {
+  description = "Guards the database against terraform destroying it. Leave true. Set false only for the single apply that recreates the instance during a subnet_cidr move, and put it back afterwards."
+  type        = bool
+  default     = true
+}
+
 variable "rds_instance_class" {
   description = "RDS Postgres instance class. db.t4g.small is the SaaS default and fits comfortably up to ~50 employees; upsize for larger orgs."
   type        = string
