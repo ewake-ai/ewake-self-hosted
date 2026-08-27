@@ -30,6 +30,7 @@ module "lambdas" {
   depends_on = [aws_ecs_service.reactive]
 
   company                      = var.company
+  tenant_name                  = var.tenant_name
   company_base_url             = local.company_base_url
   public_inbound_base_url      = local.public_inbound_base_url
   sso_base_url                 = local.dex_base_url
@@ -77,6 +78,7 @@ module "scheduled_lambdas" {
   source = "./lambdas/scheduled"
 
   company                 = var.company
+  tenant_name             = var.tenant_name
   company_base_url        = local.company_base_url
   public_inbound_base_url = local.public_inbound_base_url
   sso_base_url            = local.dex_base_url

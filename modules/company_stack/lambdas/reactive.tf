@@ -55,7 +55,7 @@ resource "aws_lambda_function" "reactive_processor" {
         # --disable-warning=DEP0040: see scheduled/locals.tf for rationale.
         NODE_OPTIONS      = "--enable-source-maps --disable-warning=DEP0040"
         CLIENT            = var.company.name
-        TENANT            = terraform.workspace
+        TENANT            = var.tenant_name
         COMPANY_DOMAIN    = var.company.domain
         DD_SERVICE        = "reactive-lambda"
         POSTGRES_HOST     = var.rds_endpoint

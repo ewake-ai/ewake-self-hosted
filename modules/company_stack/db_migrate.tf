@@ -98,7 +98,7 @@ resource "aws_ecs_task_definition" "db_migrate" {
         { name = "NODE_ENV", value = "production" },
         { name = "AWS_REGION", value = var.aws_region },
         { name = "CLIENT", value = var.company.name },
-        { name = "TENANT", value = terraform.workspace },
+        { name = "TENANT", value = var.tenant_name },
         # The seed step refuses to create a company row without this; reactive supplied it
         # when it did its own seeding.
         { name = "COMPANY_DOMAIN", value = var.company.domain },
