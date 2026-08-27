@@ -57,7 +57,7 @@ resource "aws_iam_role_policy" "bootstrap_lambda" {
 
 resource "aws_security_group" "bootstrap_lambda" {
   name        = "${var.tenant_name}-rds-bootstrap-lambda"
-  description = "Tenant RDS bootstrap Lambda. Egress to the VPC and subnet CIDRs on 5432 (RDS) only."
+  description = "Tenant RDS bootstrap Lambda. Egress to the VPC CIDR on 5432 (RDS) only."
   vpc_id      = aws_vpc.this.id
 
   egress {
