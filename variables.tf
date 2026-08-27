@@ -280,32 +280,15 @@ variable "azs" {
 }
 
 variable "vpc_cidr" {
-  description = "IPv4 CIDR block for the VPC. /16 gives room for the subnets and NAT gateways. AWS cannot change a VPC's primary CIDR, so on an existing deployment set subnet_cidr instead and leave this alone."
+  description = "IPv4 CIDR block for the VPC. /16 gives room for the subnets and NAT gateways. AWS cannot change a VPC's primary CIDR, so changing this on a live deployment means a destroy and rebuild."
   type        = string
   default     = "10.10.0.0/16"
 }
 
-# Editing vpc_cidr on a live deployment replaces the VPC and everything in it,
-# including the ALB — whose DNS name the customer owns a record for and would have
-# to repoint by hand. This exists so the subnets can move to a new range without
-# that: AWS lets a VPC carry secondary CIDRs, and aws_lb.subnets is mutable, so the
-# load balancer moves with its ARN and DNS name intact.
-variable "subnet_cidr" {
-  description = "IPv4 CIDR the subnets are carved from. Defaults to vpc_cidr. Set it to a different range to move the subnets there: it is associated to the VPC as a secondary CIDR and the primary is left in place (AWS cannot remove a primary). Must be at least a /20 — the subnets are /24s carved with cidrsubnet(_, 4, n)."
-  type        = string
-  default     = null
-
-  validation {
-    condition     = var.subnet_cidr == null || can(cidrsubnet(coalesce(var.subnet_cidr, "10.0.0.0/20"), 4, 3))
-    error_message = "subnet_cidr must be a valid CIDR no smaller than a /20."
-  }
-}
-
-# AWS will not move a DB instance between subnet groups inside one VPC
-# (InvalidVPCNetworkStateFault), so a subnet_cidr move recreates it from a
-# snapshot rather than relocating it — which needs this off for one apply.
+# Needed for the one apply that tears a deployment down: terraform cannot destroy
+# a protected instance, and the guard is deliberately not something an apply lifts.
 variable "rds_deletion_protection" {
-  description = "Guards the database against terraform destroying it. Leave true. Set false only for the single apply that recreates the instance during a subnet_cidr move, and put it back afterwards."
+  description = "Guards the database against terraform destroying it. Leave true. Set false only for a deliberate teardown, and put it back afterwards."
   type        = bool
   default     = true
 }

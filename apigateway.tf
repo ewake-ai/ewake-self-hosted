@@ -18,7 +18,7 @@ locals {
   # The VPC link reaches the ALB from inside the VPC, so its range has to be
   # admitted whatever the customer scoped alb_ingress_cidrs down to — a private
   # deployment may list only a VPN range, which would leave the gateway timing out.
-  alb_ingress_cidrs = local.public_inbound_gateway ? distinct(concat(var.alb_ingress_cidrs, [local.subnet_cidr])) : var.alb_ingress_cidrs
+  alb_ingress_cidrs = local.public_inbound_gateway ? distinct(concat(var.alb_ingress_cidrs, [var.vpc_cidr])) : var.alb_ingress_cidrs
 
   gateway_base_url = local.public_inbound_gateway ? "https://${aws_apigatewayv2_api.public_inbound[0].id}.execute-api.${var.aws_region}.amazonaws.com" : null
 }
@@ -52,7 +52,7 @@ resource "aws_security_group" "vpc_link" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [local.subnet_cidr]
+    cidr_blocks = [var.vpc_cidr]
   }
 
   tags = { Name = "${var.tenant_name}-vpc-link" }

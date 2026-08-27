@@ -6,15 +6,10 @@ resource "aws_security_group" "vpc_endpoints" {
   vpc_id      = aws_vpc.this.id
 
   ingress {
-    from_port = 443
-    to_port   = 443
-    protocol  = "tcp"
-    # Both ranges, not aws_vpc.this.cidr_block: during a subnet_cidr move the
-    # subnets sit outside the primary, and an endpoint SG that admits only the
-    # primary silently cuts every workload off from Secrets Manager and ECR —
-    # which surfaces as ECS "unable to retrieve secret from asm", not as a
-    # networking error.
-    cidr_blocks = distinct([aws_vpc.this.cidr_block, local.subnet_cidr])
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.this.cidr_block]
   }
 
   tags = {

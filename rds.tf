@@ -3,18 +3,9 @@
 # Ewake's Datadog org, which a customer deployment must not do.
 
 resource "aws_db_subnet_group" "this" {
-  # name_prefix, not name: a subnet_cidr move cannot update this group in place,
-  # because RDS refuses to drop a subnet its instance sits in. The group is
-  # replaced instead, which needs a free name at the moment of creation.
-  #
-  # Deliberately NOT create_before_destroy — it would not help. CBD propagates to a
-  # resource's *dependencies*, and aws_ecs_service already carries it, so the whole
-  # chain below it is create-before-destroy already: service -> task definition ->
-  # aws_db_instance (its POSTGRES_HOST) -> this group -> the subnets. That is why a
-  # subnet_cidr move plans the database create-before-destroy and fails with
-  # DBInstanceAlreadyExists on its fixed `identifier`, and why the Neo4j volume
-  # hits VolumeInUse on the same apply. Neither is fixable here; both are pre-steps
-  # in the README's subnet_cidr runbook.
+  # name_prefix, not name: a fixed name cannot be replaced, and RDS refuses to drop
+  # a subnet its instance sits in — so any change to the subnet set would deadlock
+  # on a group terraform can neither update nor recreate.
   name_prefix = "${var.tenant_name}-"
   subnet_ids  = aws_subnet.private[*].id
 
