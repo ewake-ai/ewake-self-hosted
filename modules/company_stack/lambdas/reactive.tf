@@ -45,6 +45,13 @@ resource "aws_lambda_function" "reactive_processor" {
       {
         NODE_ENV       = "production"
         EWAKE_BASE_URL = var.internal_reactive_base_url
+        # Same value, named for the job: reactiveClient.ts reads internalBaseURL, and this hop
+        # must not resolve the ALB and hairpin back out.
+        INTERNAL_BASE_URL = var.internal_reactive_base_url
+        # Unread here, but required at config import.
+        PUBLIC_INBOUND_BASE_URL = var.public_inbound_base_url
+        DASHBOARD_BASE_URL      = var.company_base_url
+        SSO_BASE_URL            = var.sso_base_url
         # --disable-warning=DEP0040: see scheduled/locals.tf for rationale.
         NODE_OPTIONS      = "--enable-source-maps --disable-warning=DEP0040"
         CLIENT            = var.company.name

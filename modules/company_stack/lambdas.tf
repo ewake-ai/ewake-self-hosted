@@ -30,6 +30,9 @@ module "lambdas" {
   depends_on = [aws_ecs_service.reactive]
 
   company                      = var.company
+  company_base_url             = local.company_base_url
+  public_inbound_base_url      = local.public_inbound_base_url
+  sso_base_url                 = local.dex_base_url
   arn_prefix                   = local.arn_prefix
   ssm_path                     = local.ssm_path
   task_role_arn                = aws_iam_role.task.arn
@@ -74,6 +77,9 @@ module "scheduled_lambdas" {
   source = "./lambdas/scheduled"
 
   company                 = var.company
+  company_base_url        = local.company_base_url
+  public_inbound_base_url = local.public_inbound_base_url
+  sso_base_url            = local.dex_base_url
   arn_prefix              = local.arn_prefix
   ssm_path                = local.ssm_path
   task_role_arn           = aws_iam_role.task.arn

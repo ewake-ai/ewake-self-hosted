@@ -67,6 +67,11 @@ azs = ["eu-west-3a", "eu-west-3b"]
 # network, or an SSM port-forward. Set both — `internal` removes the public IPs,
 # the CIDR list is what actually refuses a packet. See README → Private deployments.
 # alb_internal       = true
+#
+# With alb_internal, Slack and Datadog cannot reach the ALB. Point them at your own
+# public entry point in front of it; the dashboard stays private either way.
+# See README -> "Inbound webhooks on a private deployment".
+# public_inbound_base_url = "https://ewake-inbound.example.com"
 # alb_ingress_cidrs  = ["10.10.0.0/16", "10.38.0.0/23"]
 # vpc_cidr           = "10.10.0.0/16"
 # rds_instance_class = "db.t4g.small"

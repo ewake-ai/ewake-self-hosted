@@ -12,6 +12,7 @@ module "company" {
   tenant_name                    = var.tenant_name
   root_domain                    = var.root_domain
   company_host                   = local.company_host
+  public_inbound_base_url        = var.public_inbound_base_url
   orchestrator_url               = null
   admin_notify_url               = null
   hosted_zone_id                 = var.hosted_zone_id

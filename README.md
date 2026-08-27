@@ -250,6 +250,24 @@ own it (`hosted_zone_id = null`) your hostname points at a load balancer that no
 longer exists until you repoint it by hand, and `terraform output dns_wiring` is
 where the new target comes from.
 
+#### Inbound webhooks on a private deployment
+
+A private ALB has no route from the internet, so Slack and Datadog cannot deliver
+to it. The dashboard is unaffected — your users reach it over your own network —
+but any integration that calls *in* needs a public entry point in front.
+
+If you already run one (an API gateway, a reverse proxy, a CDN) point it at the
+ALB and name it here:
+
+```hcl
+public_inbound_base_url = "https://ewake-inbound.example.com"
+```
+
+The Slack manifest and the Datadog webhook are then registered against that URL
+instead of the dashboard host, which stays private. Leave it unset when the ALB is
+public — both roles are the same name then, and this is the only difference
+between them.
+
 `alb_ingress_cidrs` has none of that cost — it is security-group rules, changeable
 in place at any time. Tightening or widening who can reach an existing deployment
 is always cheap; changing whether it is public is not.

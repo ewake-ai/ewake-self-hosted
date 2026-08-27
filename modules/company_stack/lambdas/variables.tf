@@ -161,3 +161,18 @@ variable "internal_sg_id" {
   description = "Per-company security group granting access to the reactive task's internal ports. Every Lambda that calls the internal API joins it."
   type        = string
 }
+
+variable "company_base_url" {
+  description = "This company's own https URL. Not read by these functions — src/core/config requires the base URLs at import, and src/core/logger pulls config into every runtime."
+  type        = string
+}
+
+variable "public_inbound_base_url" {
+  description = "Public https base URL third parties reach this deployment on. Same as company_base_url unless a private ALB puts an entry point in front. Not read by these functions; required at config import."
+  type        = string
+}
+
+variable "sso_base_url" {
+  description = "The origin the browser drives the OIDC hops against. Not read by these functions; required at config import."
+  type        = string
+}
