@@ -285,14 +285,6 @@ variable "vpc_cidr" {
   default     = "10.10.0.0/16"
 }
 
-# Needed for the one apply that tears a deployment down: terraform cannot destroy
-# a protected instance, and the guard is deliberately not something an apply lifts.
-variable "rds_deletion_protection" {
-  description = "Guards the database against terraform destroying it. Leave true. Set false only for a deliberate teardown, and put it back afterwards."
-  type        = bool
-  default     = true
-}
-
 variable "rds_instance_class" {
   description = "RDS Postgres instance class. db.t4g.small is the SaaS default and fits comfortably up to ~50 employees; upsize for larger orgs."
   type        = string

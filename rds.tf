@@ -53,10 +53,15 @@ resource "aws_db_instance" "this" {
   username                    = "postgres"
   password                    = random_password.rds_master.result
   backup_retention_period     = 7
-  deletion_protection         = var.rds_deletion_protection
-  apply_immediately           = false
-  publicly_accessible         = false
-  skip_final_snapshot         = false
+  # Hardcoded, not a variable: its job is not stopping a deliberate destroy — that
+  # only needs the one CLI call in the README, since destroy never re-applies
+  # config. It is stopping an accidental replacement, which terraform will
+  # otherwise carry out on a live database without asking. A guard tfvars can
+  # switch off is one that gets switched off for a teardown and never switched back.
+  deletion_protection = true
+  apply_immediately   = false
+  publicly_accessible = false
+  skip_final_snapshot = false
   # Not timestamp(): that changes on every plan, which is why this attribute used to
   # carry ignore_changes — and ignore_changes kept it out of state entirely, so the
   # destroy had no identifier to hand AWS and failed on every attempt:
