@@ -321,6 +321,12 @@ locals {
 
   company_base_url = "https://${local.company_host}"
 
+  # Where third parties reach this deployment. The same host as the dashboard whenever the
+  # ALB is public, which is why it defaults to it. A private ALB splits them: Slack and
+  # Datadog cannot route to an internal name, so they need a public entry point in front,
+  # and only this value moves — the dashboard stays on the private host.
+  public_inbound_base_url = coalesce(var.public_inbound_base_url, local.company_base_url)
+
   tags = merge(var.common_tags, {
     Company = var.company.name
   })
@@ -344,3 +350,14 @@ locals {
 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
+
+variable "public_inbound_base_url" {
+  description = "Public https base URL third parties (Slack, Datadog) use to reach this deployment, when that is not the dashboard host. Only needed behind a private ALB, where an entry point in front of it terminates the call. Null serves both from the company host."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.public_inbound_base_url == null || can(regex("^https://", var.public_inbound_base_url))
+    error_message = "public_inbound_base_url must be an https:// URL; Slack and Datadog refuse to deliver to anything else."
+  }
+}

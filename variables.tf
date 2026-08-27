@@ -369,3 +369,24 @@ locals {
   # README).
   lambda_bundle_image_uri = "${local.ewake_ecr_registry}/ewake-lambdas:${var.release_channel}"
 }
+
+variable "public_inbound_base_url" {
+  description = <<-EOT
+    Public https base URL that Slack and Datadog use to reach this deployment, when that is
+    not the dashboard host.
+
+    Only needed with alb_internal = true. A private ALB has no route from the internet, so
+    inbound webhooks need a public entry point in front of it; set this to that entry point's
+    URL and the Slack manifest and Datadog webhook are registered against it. The dashboard
+    keeps answering on the private host either way.
+
+    Leave null when the ALB is public — both roles are then the same name.
+  EOT
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.public_inbound_base_url == null || can(regex("^https://", var.public_inbound_base_url))
+    error_message = "public_inbound_base_url must be an https:// URL; Slack and Datadog refuse to deliver to anything else."
+  }
+}

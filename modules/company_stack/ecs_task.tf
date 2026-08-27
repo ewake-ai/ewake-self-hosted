@@ -110,6 +110,11 @@ resource "aws_ecs_task_definition" "reactive" {
         { name = "TENANT", value = var.tenant_name },
         # Absent, src/core/config falls back to `https://${CLIENT}.ewake.ai` — our domain.
         { name = "EWAKE_BASE_URL", value = local.company_base_url },
+        # Required at config import, and named for who reaches each. Identical behind a public
+        # ALB; a private one moves only the first onto its public entry point.
+        { name = "PUBLIC_INBOUND_BASE_URL", value = local.public_inbound_base_url },
+        { name = "DASHBOARD_BASE_URL", value = local.company_base_url },
+        { name = "INTERNAL_BASE_URL", value = local.company_base_url },
         { name = "DD_SERVICE", value = "reactive" },
         { name = "LAMBDA_QUEUE_URL", value = aws_sqs_queue.lambda.url },
         { name = "LOG_CLUSTERING_FUNCTION_NAME", value = var.log_clustering_function_name },

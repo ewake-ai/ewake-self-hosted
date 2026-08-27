@@ -105,6 +105,13 @@ resource "aws_ecs_task_definition" "db_migrate" {
         # Not 1: each chain probes the migrations table on one connection while
         # drizzle opens another for CREATE SCHEMA, so a pool of 1 deadlocks.
         { name = "POSTGRES_POOL_MAX", value = "5" },
+        # This task resolves no URL, but src/core/config requires them at import and
+        # src/core/db pulls config in. Without them it exits before the first chain runs,
+        # which fails the gate in front of every deploy.
+        { name = "PUBLIC_INBOUND_BASE_URL", value = local.public_inbound_base_url },
+        { name = "DASHBOARD_BASE_URL", value = local.company_base_url },
+        { name = "INTERNAL_BASE_URL", value = local.company_base_url },
+        { name = "SSO_BASE_URL", value = local.dex_base_url },
       ]
       secrets = [
         { name = "POSTGRES_HOST", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:host::" },
