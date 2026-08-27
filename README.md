@@ -591,6 +591,23 @@ loops) used to run from one ECR repository each. They now share a single
 old per-Lambda repositories are no longer built, so a deployment left on
 them silently freezes on its last image.
 
+Worse once the old repository is actually deleted on the Ewake side, which
+has now happened: AWS Lambda re-validates the *current* code artifact on
+every configuration change, so a function still pointing at a repository
+that no longer exists cannot be updated at all. Any apply that touches these
+functions — even one that only adds an environment variable — fails with:
+
+```
+Error: updating Lambda Function (<tenant>-<company>-knowledge-graph) configuration:
+ResourceConflictException: ... AWS Lambda does not have permission to access the
+provided code artifact. Please configure the required permissions in the ECR repository.
+```
+
+The message points at ECR permissions, which is misleading — the grant is
+fine, the repository is gone. The replace below is the fix; it recreates each
+function against the bundled image rather than trying to update one that
+cannot be read.
+
 `terraform apply` alone will **not** move them. Every Lambda in this stack
 carries `lifecycle { ignore_changes = [image_uri] }`, so changing the image
 is invisible to a normal plan. Replace them explicitly, once:
@@ -618,8 +635,8 @@ aws lambda get-function --function-name <tenant_name>-<company.name>-knowledge-g
 ```
 
 If a function still shows `ewake-lambda-knowledge-graph`, the replace did
-not take — re-run rather than leaving it, since the old repository can be
-deleted on the Ewake side at any point after every deployment has moved.
+not take — re-run rather than leaving it. The old repositories have already
+been deleted, so a function left behind is wedged rather than merely stale.
 
 ## Tearing down
 
