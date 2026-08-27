@@ -65,7 +65,7 @@ resource "aws_security_group" "bootstrap_lambda" {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = distinct([aws_vpc.this.cidr_block, local.subnet_cidr])
+    cidr_blocks = [aws_vpc.this.cidr_block]
   }
 
   egress {
@@ -73,7 +73,7 @@ resource "aws_security_group" "bootstrap_lambda" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = distinct([aws_vpc.this.cidr_block, local.subnet_cidr])
+    cidr_blocks = [aws_vpc.this.cidr_block]
   }
 
   tags = {

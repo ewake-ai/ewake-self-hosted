@@ -9,12 +9,6 @@
 # changes their state addresses and one mis-issued `moved {}` block would
 # destroy live tenant infra.
 
-locals {
-  # The range the subnets actually live in. Equal to the primary unless a deployment
-  # is being moved, in which case it is the secondary associated below.
-  subnet_cidr = coalesce(var.subnet_cidr, var.vpc_cidr)
-}
-
 resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -25,22 +19,11 @@ resource "aws_vpc" "this" {
   }
 }
 
-# Only when the subnets are being moved off the primary. A fresh deployment leaves
-# subnet_cidr unset and never creates this.
-resource "aws_vpc_ipv4_cidr_block_association" "subnets" {
-  count = local.subnet_cidr == var.vpc_cidr ? 0 : 1
-
-  vpc_id     = aws_vpc.this.id
-  cidr_block = local.subnet_cidr
-}
-
 resource "aws_subnet" "public" {
   count = length(var.azs)
 
-  vpc_id = aws_vpc.this.id
-  # Replacing a subnet in place would mean destroying one the ALB and the NAT
-  # gateways still sit in, which AWS refuses. Built first, moved onto, then removed.
-  cidr_block        = cidrsubnet(local.subnet_cidr, 4, count.index)
+  vpc_id            = aws_vpc.this.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 4, count.index)
   availability_zone = var.azs[count.index]
 
   # Diff from terraform/tenants/vpc.tf, which still has this true. Only the ALB
@@ -49,14 +32,6 @@ resource "aws_subnet" "public" {
   # put in a public subnet next. Mirror back into tenants/ when the SaaS roots
   # get the same sweep.
   map_public_ip_on_launch = false
-
-  # The association has to exist before a subnet can be carved from it, and nothing
-  # in the arguments references it — local.subnet_cidr is a string.
-  depends_on = [aws_vpc_ipv4_cidr_block_association.subnets]
-
-  lifecycle {
-    create_before_destroy = true
-  }
 
   tags = {
     Name = "${var.tenant_name}-public-${var.azs[count.index]}"
@@ -68,16 +43,8 @@ resource "aws_subnet" "private" {
   count = length(var.azs)
 
   vpc_id            = aws_vpc.this.id
-  cidr_block        = cidrsubnet(local.subnet_cidr, 4, count.index + length(var.azs))
+  cidr_block        = cidrsubnet(var.vpc_cidr, 4, count.index + length(var.azs))
   availability_zone = var.azs[count.index]
-
-  # The association has to exist before a subnet can be carved from it, and nothing
-  # in the arguments references it — local.subnet_cidr is a string.
-  depends_on = [aws_vpc_ipv4_cidr_block_association.subnets]
-
-  lifecycle {
-    create_before_destroy = true
-  }
 
   tags = {
     Name = "${var.tenant_name}-private-${var.azs[count.index]}"
