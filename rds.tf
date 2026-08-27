@@ -30,6 +30,10 @@ resource "aws_secretsmanager_secret_version" "rds_master" {
   })
 }
 
+resource "random_id" "final_snapshot" {
+  byte_length = 4
+}
+
 resource "aws_db_instance" "this" {
   identifier = var.tenant_name
 
@@ -50,11 +54,15 @@ resource "aws_db_instance" "this" {
   apply_immediately           = false
   publicly_accessible         = false
   skip_final_snapshot         = false
-  final_snapshot_identifier   = "${var.tenant_name}-final-${formatdate("YYYY-MM-DD", timestamp())}"
-
-  lifecycle {
-    ignore_changes = [final_snapshot_identifier]
-  }
+  # Not timestamp(): that changes on every plan, which is why this attribute used to
+  # carry ignore_changes — and ignore_changes kept it out of state entirely, so the
+  # destroy had no identifier to hand AWS and failed on every attempt:
+  #
+  #   Error: final_snapshot_identifier is required when skip_final_snapshot is false
+  #
+  # random_id is drawn once at create and stored, so plans stay quiet, the name stays
+  # unique across rebuilds, and terraform still knows what to call the snapshot.
+  final_snapshot_identifier = "${var.tenant_name}-final-${random_id.final_snapshot.hex}"
 
   tags = {
     Name = var.tenant_name
