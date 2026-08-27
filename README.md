@@ -27,15 +27,32 @@ Ewake grants that access to your account ID before your first apply.
    in your IdP and configure SSO connectors — see [SSO setup](#4-sso--single-sign-on).
 
 5. **AWS Bedrock model access.** Enable the following models in the
-   `eu-west-3` region via the AWS Console → Bedrock → Model access:
-   - `eu.anthropic.claude-sonnet-4-6-20250514`
-   - `eu.anthropic.claude-sonnet-4-5-20250514`
-   - `eu.anthropic.claude-haiku-4-5-20251001`
-   - `eu.anthropic.claude-opus-4-20250514`
+   `eu-west-3` region via the AWS Console → Bedrock → Model access. These are
+   the exact IDs the runtime invokes (`src/common/utils/LLM/models.ts`); the
+   `eu.` prefix is a cross-region inference profile, so the console lists each
+   one under its underlying model name:
+   - `eu.anthropic.claude-opus-4-5-20251101-v1:0`
+   - `eu.anthropic.claude-sonnet-4-6`
+   - `eu.anthropic.claude-sonnet-4-5-20250929-v1:0`
+   - `eu.anthropic.claude-haiku-4-5-20251001-v1:0`
    - `cohere.embed-multilingual-v3`
 
-   Without these grants the agents fail with an opaque AWS Marketplace
-   error at runtime.
+   Enable all five. A partial grant fails in a way that reads like a product
+   bug rather than a missing entitlement: the parent agent runs on Opus, so it
+   answers, while every sub-agent runs on Haiku with Sonnet 4.5 behind it — so
+   an account missing those two returns a fluent reply that has investigated
+   nothing, and buries the cause in an AWS Marketplace error naming
+   `aws-marketplace:ViewSubscriptions`.
+
+   Verify with a call per model rather than by reading the console:
+
+   ```bash
+   aws bedrock-runtime invoke-model --region eu-west-3 \
+     --model-id eu.anthropic.claude-haiku-4-5-20251001-v1:0 \
+     --content-type application/json \
+     --body "$(echo '{"anthropic_version":"bedrock-2023-05-31","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}' | base64)" \
+     /dev/null
+   ```
 
 6. **Terraform >= 1.10** and the **AWS CLI**, both authenticated as the
    same principal. Terraform locks state with an S3 `.tflock` object
