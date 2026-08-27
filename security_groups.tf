@@ -1,9 +1,18 @@
 # See vpc.tf for the duplication note.
 
 resource "aws_security_group" "alb" {
-  name        = "${var.tenant_name}-alb"
+  # name_prefix, not name: a security group's description is immutable in AWS, so editing it
+  # forces replacement — and a replacement of a fixed-name group fails with
+  # InvalidGroup.Duplicate, because the new one is created before the old is gone. That is
+  # unrecoverable without hand-deleting the group the live ALB is using. The generated suffix
+  # lets the two coexist for the seconds it takes to swap; tags.Name stays readable.
+  name_prefix = "${var.tenant_name}-alb-"
   description = "Tenant ALB ingress, from var.alb_ingress_cidrs (the public internet by default)"
   vpc_id      = aws_vpc.this.id
+
+  lifecycle {
+    create_before_destroy = true
+  }
 
   ingress {
     from_port   = 443

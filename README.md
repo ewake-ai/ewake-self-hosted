@@ -529,6 +529,56 @@ those track `:latest`). A rollback to an older `app_image_tag` runs
 that server version against current Lambda and sidecar images. Leave
 `app_image_tag` unset (or `null`) to follow `release_channel`.
 
+### One-time: upgrading a deployment first applied before v1.0.0
+
+**Only deployments whose last apply predates the v1.0.0 tag need this.** Check
+with `terraform state list | grep aws_route.` — if that prints nothing, you are
+here. A fresh deployment is already correct; skip ahead.
+
+v1.0.0 pulled the default routes out of the route tables into standalone
+`aws_route` resources, and put the certificate behind a `count`. Terraform cannot
+work out on its own that the routes it wants to create are the ones AWS already
+has, so `terraform apply` fails with:
+
+```
+Error: creating Route in Route Table (rtb-...): RouteAlreadyExists
+```
+
+Fix it with three imports — but **do the two state moves first**. Terraform
+migrates `this` to `this[0]` automatically during plan and apply, and *not*
+during import, so importing first fails with `aws_acm_certificate.this is empty
+tuple`:
+
+```sh
+terraform state mv 'aws_acm_certificate.this'            'aws_acm_certificate.this[0]'
+terraform state mv 'aws_acm_certificate_validation.this' 'aws_acm_certificate_validation.this[0]'
+```
+
+Then find your route table IDs and import the default route from each:
+
+```sh
+terraform state show aws_route_table.public     | grep -m1 '^    id'
+terraform state show 'aws_route_table.private[0]' | grep -m1 '^    id'
+terraform state show 'aws_route_table.private[1]' | grep -m1 '^    id'
+
+terraform import 'aws_route.public_default'     '<public-rtb-id>_0.0.0.0/0'
+terraform import 'aws_route.private_default[0]' '<private-rtb-id-0>_0.0.0.0/0'
+terraform import 'aws_route.private_default[1]' '<private-rtb-id-1>_0.0.0.0/0'
+```
+
+`private_default[N]` matches `aws_route_table.private[N]`, which follows the
+order of `azs` — read the IDs out of state as above rather than guessing from the
+console.
+
+Then `terraform plan` should show no route creations, and you can apply
+normally.
+
+> The ALB security group is replaced during this upgrade: its description
+> changed, and descriptions are immutable in AWS. That is expected and takes
+> seconds. Deployments that last applied on v1.1.0 or earlier with a fixed group
+> name would have failed here with `InvalidGroup.Duplicate`; v1.1.1 switched the
+> group to a generated name so the replacement can happen in place.
+
 ### One-time: moving the scheduled Lambdas onto the bundled image
 
 **Only deployments first applied before Ewake v0.150.0 need this.** A fresh
