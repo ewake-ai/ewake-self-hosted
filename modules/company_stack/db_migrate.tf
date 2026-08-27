@@ -143,7 +143,13 @@ resource "terraform_data" "db_migrate" {
   count = local.is_byoc ? 1 : 0
 
   # Re-running is safe, but costs a Fargate cold start — keep a no-op apply a no-op.
-  triggers_replace = [aws_ecs_task_definition.db_migrate.arn]
+  #
+  # rds_resource_id, not just the task definition: a recreated instance keeps its
+  # identifier, so its endpoint and this task definition are byte-identical and
+  # nothing here would re-run — leaving an empty database and an image that refuses
+  # to serve with "Database schema is behind this image". The DbiResourceId is the
+  # one value that changes when the instance is rebuilt.
+  triggers_replace = [aws_ecs_task_definition.db_migrate.arn, var.rds_resource_id]
 
   provisioner "local-exec" {
     interpreter = ["/bin/sh", "-c"]

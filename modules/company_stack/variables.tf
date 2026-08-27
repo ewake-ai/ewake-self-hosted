@@ -149,6 +149,12 @@ variable "rds_endpoint" {
   type = string
 }
 
+# Changes when the instance is rebuilt, unlike the endpoint, which a same-identifier
+# replacement leaves untouched. Used to re-trigger db-migrate.
+variable "rds_resource_id" {
+  type = string
+}
+
 variable "rds_port" {
   type = number
 }
