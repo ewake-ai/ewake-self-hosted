@@ -317,6 +317,56 @@ between them.
 in place at any time. Tightening or widening who can reach an existing deployment
 is always cheap; changing whether it is public is not.
 
+##### Which paths the gateway routes
+
+When `public_inbound_gateway` is on, only the paths a third party actually calls
+are routed; anything else is a 404 at the gateway and never reaches the VPC. The
+dashboard, the API and SSO are deliberately not among them — those you reach over
+your own network.
+
+| path | called by |
+| ---- | --------- |
+| `POST /api/v1/slack/events` | Slack |
+| `POST /api/v1/slack/interactive` | Slack (buttons and modals) |
+| `POST /api/webhook/datadog/{token}` | Datadog monitors |
+| `GET /android-chrome-512x512.png` | Slack, rendering a message block |
+| `POST /api/v1/events/deployment` | your CI — see below |
+
+#### Sending deployment events
+
+Ewake correlates incidents against what you shipped. Your CI posts one event per
+deploy; nothing polls your repositories, so without this the agent investigates
+without knowing a release just went out.
+
+Mint an API key in the dashboard under **API Keys**, then POST as that key. The
+key is shown once:
+
+```bash
+curl -X POST https://<your-ewake-host>/api/v1/events/deployment \
+  -H "Authorization: Bearer $EWAKE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "timestamp": "2026-07-30T12:00:00Z",
+    "repository": "my-org/my-service",
+    "repositoryUrl": "https://github.com/my-org/my-service",
+    "artifactName": "my-service",
+    "commitSha": "a1b2c3d4e5f6",
+    "version": "v1.4.2",
+    "url": "https://github.com/my-org/my-service/actions/runs/123",
+    "message": "Bump connection pool size",
+    "source": "github-actions"
+  }'
+```
+
+`timestamp`, `repository`, `repositoryUrl`, `artifactName` and `commitSha` are
+required; `version`, `url`, `message`, `labels` and `source` are optional. A
+malformed body returns `400` naming the offending field. A valid one returns
+`202` immediately — ingestion and release watch run after the response.
+
+On a **private** deployment, `<your-ewake-host>` is your `public_inbound_base_url`
+if your CI runs outside the VPC, or the dashboard host if it runs inside. The
+gateway routes this path for exactly that reason.
+
 A private ALB does not require a private DNS story. If you *can* delegate a public
 zone, keep `hosted_zone_id` set: ACM validates by reading a DNS record, never by
 connecting to the load balancer, so a private ALB and a public zone are not in
