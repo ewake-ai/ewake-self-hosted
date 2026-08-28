@@ -162,7 +162,8 @@ data "aws_iam_policy_document" "task" {
     actions = ["iam:PassRole"]
     resources = [
       "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/service-role/Amazon_EventBridge_Scheduler_*",
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/Amazon_EventBridge_Scheduler_LAMBDA_${local.arn_prefix}"
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/Amazon_EventBridge_Scheduler_LAMBDA_${local.arn_prefix}",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/Amazon_EventBridge_Scheduler_SQS_${local.arn_prefix}"
     ]
 
     condition {
