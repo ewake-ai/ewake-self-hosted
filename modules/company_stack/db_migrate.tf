@@ -162,19 +162,46 @@ resource "terraform_data" "db_migrate" {
     }
     command = <<-EOT
       set -eu
-      started=$(aws ecs run-task \
-        --cluster "$CLUSTER" \
-        --task-definition "$TASK_DEF" \
-        --launch-type FARGATE \
-        --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=DISABLED}" \
-        --query '{arn:tasks[0].taskArn,failure:failures[0].reason}' --output text)
-      task_arn=$(echo "$started" | cut -f1)
-      # RunTask reports capacity and subnet problems in failures[] with an HTTP 200 and an
-      # empty tasks[], which the wait below would read as success.
-      if [ "$task_arn" = "None" ]; then
-        echo "db-migrate did not start: $(echo "$started" | cut -f2)" >&2
-        exit 1
-      fi
+      # IAM is eventually consistent, and this task's execution role is created seconds
+      # earlier in the same apply, so ECS rejects the first RunTask on a fresh install with
+      # "unable to assume the role" — a message that points at a trust policy that is correct.
+      #
+      # Retry the call, not the provisioner: the chains are no-ops when already current, but
+      # re-running the provisioner would also re-run bootstrap_db.
+      run_task_err=$(mktemp)
+      trap 'rm -f "$run_task_err"' EXIT
+
+      attempt=1
+      delay=5
+      while :; do
+        # Two shapes of start failure, both retried. RunTask reports capacity and subnet
+        # problems in failures[] with an HTTP 200 and an empty tasks[], which the wait below
+        # would read as success. An unassumable role instead exits non-zero with the reason
+        # on stderr — kept off stdout so a chatty CLI cannot be mistaken for a task ARN.
+        if started=$(aws ecs run-task \
+          --cluster "$CLUSTER" \
+          --task-definition "$TASK_DEF" \
+          --launch-type FARGATE \
+          --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=DISABLED}" \
+          --query '{arn:tasks[0].taskArn,failure:failures[0].reason}' --output text 2>"$run_task_err"); then
+          task_arn=$(echo "$started" | cut -f1)
+          reason=$(echo "$started" | cut -f2)
+        else
+          task_arn=None
+          reason=$(cat "$run_task_err")
+        fi
+        if [ "$task_arn" != "None" ]; then
+          break
+        fi
+        if [ "$attempt" -ge 6 ]; then
+          echo "db-migrate did not start after $attempt attempts: $reason" >&2
+          exit 1
+        fi
+        echo "db-migrate start attempt $attempt failed, retrying in $${delay}s: $reason" >&2
+        sleep "$delay"
+        attempt=$((attempt + 1))
+        delay=$((delay * 2))
+      done
       echo "db-migrate task $task_arn"
       aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$task_arn"
       # A pull failure or OOM kill leaves exitCode null, so compare against a literal 0.
@@ -193,6 +220,9 @@ resource "terraform_data" "db_migrate" {
   # does not order against it.
   depends_on = [
     aws_secretsmanager_secret_version.company_db,
+    # The task definition references the secret, which does not order against its version —
+    # the agent resolves ADMIN_PASSWORD at start and fails if no version is staged yet.
+    aws_secretsmanager_secret_version.app,
     aws_lambda_invocation.bootstrap_db,
   ]
 }
