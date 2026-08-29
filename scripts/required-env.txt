@@ -1,0 +1,18 @@
+# Every name src/core/config.ts wraps in requireEnv() in the ewake-ai/back repo.
+# config is imported by src/core/logger, so a missing one throws at import and the
+# process exits before its handler runs — db-migrate first, since it gates the deploy.
+#
+# Hand-maintained: this repo cannot read back's source, and cross-repo automation is
+# deliberately out of scope. Regenerate against a back checkout with:
+#
+#   grep -oE "requireEnv\('[A-Z0-9_]+'\)" src/core/config.ts \
+#     | sed "s/requireEnv('//;s/')//" | sort -u
+#
+# Last synced from back at ewake-v0.161.0.
+
+DASHBOARD_BASE_URL
+INTERNAL_BASE_URL
+JWT_SECRET
+ORCHESTRATOR_SECRET
+PUBLIC_INBOUND_BASE_URL
+SSO_BASE_URL

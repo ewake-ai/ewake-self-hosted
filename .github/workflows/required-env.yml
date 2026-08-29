@@ -1,0 +1,26 @@
+name: Required env CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  required-env:
+    name: Required env reaches every runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Grep over the terraform against a committed list of names — no terraform
+      # init, no AWS credentials, no network.
+      - run: ./scripts/check-required-env.sh modules/company_stack scripts/required-env.txt
