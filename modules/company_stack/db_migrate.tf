@@ -120,6 +120,10 @@ resource "aws_ecs_task_definition" "db_migrate" {
         { name = "POSTGRES_USER", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:username::" },
         { name = "POSTGRES_PASSWORD", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:password::" },
         { name = "ADMIN_PASSWORD", valueFrom = "${aws_secretsmanager_secret.app[0].arn}:ADMIN_PASSWORD::" },
+        # This task authenticates nothing, but src/core/config requires both at import and
+        # src/core/db pulls config in — the same reason the base URLs are set above.
+        { name = "JWT_SECRET", valueFrom = "${aws_secretsmanager_secret.app[0].arn}:JWT_SECRET::" },
+        { name = "ORCHESTRATOR_SECRET", valueFrom = local.orchestrator_secret_value_from },
       ]
       logConfiguration = {
         logDriver = "awslogs"

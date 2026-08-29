@@ -149,3 +149,16 @@ variable "sso_base_url" {
 variable "tenant_name" {
   type = string
 }
+
+# Neither is read by these functions. src/core/config requires both at import and
+# src/core/logger pulls config into every runtime, so a missing one exits the
+# handler before it runs — the same shape as the base URLs above.
+variable "jwt_secret" {
+  type      = string
+  sensitive = true
+}
+
+variable "orchestrator_secret" {
+  type      = string
+  sensitive = true
+}

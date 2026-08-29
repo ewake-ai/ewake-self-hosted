@@ -46,6 +46,8 @@ locals {
     INTERNAL_BASE_URL            = var.company_base_url
     SSO_BASE_URL                 = var.sso_base_url
     LOG_CLUSTERING_FUNCTION_NAME = var.log_clustering_function_name
+    JWT_SECRET                   = var.jwt_secret
+    ORCHESTRATOR_SECRET          = var.orchestrator_secret
     }, var.log_clustering_sidecar_url != null ? {
     LOG_CLUSTERING_SIDECAR_URL = var.log_clustering_sidecar_url
   } : {}, var.datadog_base_env, local.langsmith_env)

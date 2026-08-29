@@ -100,6 +100,12 @@ variable "orchestrator_secret" {
   sensitive = true
 }
 
+# Unread here — required at config import. See the scheduled submodule's copy.
+variable "jwt_secret" {
+  type      = string
+  sensitive = true
+}
+
 variable "elasticsearch_url" {
   type = string
 }
