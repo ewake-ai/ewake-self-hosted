@@ -35,10 +35,6 @@ resource "aws_lambda_function" "incident_indexing" {
   }
 
   tags = merge(local.scheduled_tags, { Service = "incident-indexing" })
-
-  lifecycle {
-    ignore_changes = [image_uri]
-  }
 }
 
 resource "aws_cloudwatch_log_subscription_filter" "incident_indexing_to_datadog" {

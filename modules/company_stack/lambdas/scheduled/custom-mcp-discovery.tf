@@ -37,10 +37,6 @@ resource "aws_lambda_function" "custom_mcp_discovery" {
   }
 
   tags = merge(local.scheduled_tags, { Service = "custom-mcp-discovery" })
-
-  lifecycle {
-    ignore_changes = [image_uri]
-  }
 }
 
 resource "aws_cloudwatch_log_subscription_filter" "custom_mcp_discovery_to_datadog" {

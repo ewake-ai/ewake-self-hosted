@@ -220,16 +220,6 @@ variable "ewake_aws_account_id" {
   }
 }
 
-variable "release_channel" {
-  description = "Which Ewake release stream the Lambda images follow: 'stable' (default; released images) or 'latest' (main-merge, dogfood). Reactive and db-migrate are not affected — they run app_image_tag, which is required."
-  type        = string
-  default     = "stable"
-
-  validation {
-    condition     = contains(["latest", "stable"], var.release_channel)
-    error_message = "release_channel must be 'latest' or 'stable'."
-  }
-}
 
 # Lambda images only, since the dashboard stopped being served from S3: the reactive
 # image now carries its own frontend, so there is no channel pointer to resolve and
@@ -237,7 +227,7 @@ variable "release_channel" {
 # why they still follow a channel rather than app_image_tag.
 
 variable "app_image_tag" {
-  description = "Immutable ECR tag the reactive service and its db-migrate task run, e.g. \"ewake-v0.153.0\". Required: a deployment must state which build it runs. Does not affect the Lambda images, which follow release_channel."
+  description = "Immutable ECR tag every Ewake image in this deployment runs — the reactive service, its db-migrate task and all eleven Lambdas, e.g. \"ewake-v0.153.0\". Required: a deployment must state which build it runs. Sidecars (Dex, CloudWatch MCP, log clustering) track :latest and are not covered."
   type        = string
   nullable    = false
 
@@ -321,8 +311,8 @@ locals {
     Deployment = "byoc"
   }
 
-  # No coalesce onto release_channel: app_image_tag is required and refuses a channel name,
-  # so there is nothing to fall back to. release_channel still selects the Lambda images.
+  # No coalesce onto a channel: app_image_tag is required and refuses a channel name,
+  # so there is nothing to fall back to. It now pins the Lambda images too.
   app_image_tag = var.app_image_tag
 
   # Resolved once here and passed down, so the root output and the module cannot
@@ -360,14 +350,18 @@ locals {
     "reactive",
   ])
   lambda_image_uris = {
-    for name in local.lambda_names : name => "${local.ewake_ecr_registry}/ewake-lambda-${name}:${var.release_channel}"
+    for name in local.lambda_names : name => "${local.ewake_ecr_registry}/ewake-lambda-${name}:${local.app_image_tag}"
   }
 
   # The nine scheduled Lambdas all run from this one image, each picking its
-  # handler via image_config. Follows release_channel like the rest of the
-  # fleet — app_image_tag does not pin it (see the image-pinning note in the
-  # README).
-  lambda_bundle_image_uri = "${local.ewake_ecr_registry}/ewake-lambdas:${var.release_channel}"
+  # handler via image_config. Pinned to app_image_tag for the same reason the
+  # server is: a channel tag moves in ECR under a running deployment, and
+  # nothing here would migrate the database to match it. Lambda resolves a tag
+  # to a digest once, at deploy time, so a retag does not move a running
+  # function — it moves at the *next* unrelated update, to whatever the channel
+  # points at then, with no migration having run. Naming the version makes the
+  # whole deployment advance as one act.
+  lambda_bundle_image_uri = "${local.ewake_ecr_registry}/ewake-lambdas:${local.app_image_tag}"
 }
 
 variable "public_inbound_base_url" {

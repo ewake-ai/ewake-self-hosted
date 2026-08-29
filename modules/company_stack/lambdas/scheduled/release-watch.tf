@@ -43,10 +43,6 @@ resource "aws_lambda_function" "release_watch" {
   }
 
   tags = merge(local.scheduled_tags, { Service = "release-watch" })
-
-  lifecycle {
-    ignore_changes = [image_uri]
-  }
 }
 
 resource "aws_cloudwatch_log_subscription_filter" "release_watch_to_datadog" {

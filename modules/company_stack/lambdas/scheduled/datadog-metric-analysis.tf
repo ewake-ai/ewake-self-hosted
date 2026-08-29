@@ -35,10 +35,6 @@ resource "aws_lambda_function" "datadog_metric_analysis" {
   }
 
   tags = merge(local.scheduled_tags, { Service = "datadog-metric-analysis" })
-
-  lifecycle {
-    ignore_changes = [image_uri]
-  }
 }
 
 resource "aws_cloudwatch_log_subscription_filter" "datadog_metric_analysis_to_datadog" {
