@@ -111,6 +111,10 @@ resource "aws_apigatewayv2_route" "public_inbound" {
     # Slack's own servers fetch this to render the loading icon in a message
     # block, so it is inbound rather than something a browser asks for.
     "GET /android-chrome-512x512.png",
+    # Deployment events from the customer's CI. Authenticated by an API key
+    # minted in the dashboard, which the caller presents directly because a
+    # self-hosted deployment has no orchestrator in front to resolve it.
+    "POST /api/v1/events/deployment",
   ]) : toset([])
 
   api_id    = aws_apigatewayv2_api.public_inbound[0].id
