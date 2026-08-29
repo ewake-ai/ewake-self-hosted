@@ -70,6 +70,7 @@ resource "aws_lambda_function" "reactive_processor" {
         NEO4J_USERNAME               = var.neo4j_username
         NEO4J_PASSWORD               = var.neo4j_password
         LOG_CLUSTERING_FUNCTION_NAME = var.log_clustering_function_name
+        JWT_SECRET                   = var.jwt_secret
       },
       # Set in both modes; empty only before shared/ has been applied, and the server gates the
       # internal API on it either way — so an empty string would fail closed at the first result post.

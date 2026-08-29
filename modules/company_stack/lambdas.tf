@@ -64,6 +64,9 @@ module "lambdas" {
   orchestrator_secret = local.is_byoc ? random_password.orchestrator_secret[0].result : (
     var.orchestrator_internal_token_secret_arn != null ? one(data.aws_secretsmanager_secret_version.orchestrator_internal_token[*].secret_string) : ""
   )
+  # byoc generates its own; saas keeps JWT_SECRET in a shared secret this module never reads,
+  # so that branch stays empty here rather than pretending to resolve it.
+  jwt_secret                 = local.is_byoc ? random_password.jwt_secret[0].result : ""
   elasticsearch_enabled      = local.elasticsearch_enabled
   elasticsearch_url          = local.elasticsearch_enabled ? data.aws_ssm_parameter.elasticsearch_url[0].value : null
   elasticsearch_api_key      = local.elasticsearch_enabled ? data.aws_ssm_parameter.elasticsearch_api_key[0].value : null
@@ -108,5 +111,9 @@ module "scheduled_lambdas" {
   log_clustering_function_name = var.log_clustering_function_name
   log_clustering_sidecar_url   = local.log_clustering_sidecar_url
   internal_sg_id               = local.log_clustering_sidecar_enabled ? aws_security_group.internal.id : null
-  tags                         = local.tags
+  jwt_secret                   = local.is_byoc ? random_password.jwt_secret[0].result : ""
+  orchestrator_secret = local.is_byoc ? random_password.orchestrator_secret[0].result : (
+    var.orchestrator_internal_token_secret_arn != null ? one(data.aws_secretsmanager_secret_version.orchestrator_internal_token[*].secret_string) : ""
+  )
+  tags = local.tags
 }
