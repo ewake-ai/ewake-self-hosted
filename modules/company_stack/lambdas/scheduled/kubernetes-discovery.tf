@@ -37,10 +37,6 @@ resource "aws_lambda_function" "kubernetes_discovery" {
   }
 
   tags = merge(local.scheduled_tags, { Service = "kubernetes-discovery" })
-
-  lifecycle {
-    ignore_changes = [image_uri]
-  }
 }
 
 resource "aws_cloudwatch_log_subscription_filter" "kubernetes_discovery_to_datadog" {

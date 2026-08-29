@@ -35,10 +35,6 @@ resource "aws_lambda_function" "datadog_span_analysis" {
   }
 
   tags = merge(local.scheduled_tags, { Service = "datadog-span-analysis" })
-
-  lifecycle {
-    ignore_changes = [image_uri]
-  }
 }
 
 resource "aws_cloudwatch_log_subscription_filter" "datadog_span_analysis_to_datadog" {

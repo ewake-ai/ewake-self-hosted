@@ -35,10 +35,6 @@ resource "aws_lambda_function" "loki_log_analysis" {
   }
 
   tags = merge(local.scheduled_tags, { Service = "loki-log-analysis" })
-
-  lifecycle {
-    ignore_changes = [image_uri]
-  }
 }
 
 resource "aws_cloudwatch_log_subscription_filter" "loki_log_analysis_to_datadog" {

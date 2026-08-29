@@ -61,7 +61,6 @@ azs = ["eu-west-3a", "eu-west-3b"]
 # transit_gateway_routes = ["10.38.0.0/23"]
 
 # Optional overrides (defaults shown):
-# release_channel    = "stable"   # selects the Lambda images only
 #
 # Private deployment: no public ingress, dashboard reached over VPN, a peered
 # network, or an SSM port-forward. Set both — `internal` removes the public IPs,

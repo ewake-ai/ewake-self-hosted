@@ -117,8 +117,6 @@ resource "aws_lambda_function" "reactive_processor" {
   })
 
   lifecycle {
-    ignore_changes = [image_uri]
-
     # Agentless resolves its endpoint from DD_SITE and authenticates with DD_API_KEY, and a missing or
     # wrong one fails terminally and silently: 401/403 is never retried and nothing is logged.
     precondition {

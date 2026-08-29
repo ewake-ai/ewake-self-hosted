@@ -232,7 +232,6 @@ azs            = ["eu-west-3a", "eu-west-3b"]
 
 | Variable | Default | Notes |
 |---|---|---|
-| `release_channel` | `"stable"` | `"latest"` for pre-release builds |
 | `vpc_cidr` | `"10.10.0.0/16"` | Change if it collides with peering |
 | `rds_instance_class` | `"db.t4g.small"` | Scale up for larger teams |
 | `rds_multi_az` | `true` | `false` for cost savings in non-prod |
@@ -617,12 +616,19 @@ To pin a specific build (for rollback, or a hotfix Ewake gave you):
 app_image_tag = "ewake-v0.145.0"   # or "sha-1a2b3c4d"
 ```
 
-`app_image_tag` pins the reactive server and its database migrations
-together. It does **not** pin Lambda images (those follow
-`release_channel`) or sidecars (Dex, CloudWatch MCP, log clustering —
-those track `:latest`). A rollback to an older `app_image_tag` runs
-that server version against current Lambda and sidecar images. Leave
-`app_image_tag` unset (or `null`) to follow `release_channel`.
+`app_image_tag` pins the reactive server, its database migrations, and
+every Lambda — the whole deployment moves as one version. It does **not**
+pin the sidecars (Dex, CloudWatch MCP, log clustering), which track
+`:latest`.
+
+Lambda resolves an image tag to a digest once, when the function is
+deployed, and keeps running that digest. So a Lambda on a moving channel
+tag does not follow the channel: it stays where it was until some
+unrelated change — a new environment variable, say — makes Terraform
+update the function, at which point it jumps to whatever the channel
+points at *then*, with no migration having run. Pinning every image to
+one named version removes that: an upgrade is `app_image_tag`, plan,
+apply, and `db_migrate` gates the whole thing.
 
 ### One-time: upgrading a deployment first applied before v1.0.0
 
