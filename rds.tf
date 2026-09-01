@@ -3,10 +3,21 @@
 # Ewake's Datadog org, which a customer deployment must not do.
 
 resource "aws_db_subnet_group" "this" {
-  # name_prefix, not name: a fixed name cannot be replaced, and RDS refuses to drop
+  # name_prefix by default: a fixed name cannot be replaced, and RDS refuses to drop
   # a subnet its instance sits in — so any change to the subnet set would deadlock
   # on a group terraform can neither update nor recreate.
-  name_prefix = "${var.tenant_name}-"
+  #
+  # var.rds_subnet_group_name overrides it for a deployment created before this repo
+  # moved to name_prefix, whose group is named `<tenant_name>` with no suffix. Renaming
+  # the attribute replaces the group, and terraform then calls ModifyDBInstance to
+  # repoint the live database — which RDS rejects outright on a Multi-AZ instance:
+  #
+  #   InvalidParameterCombination: You cannot move a DB instance with Multi-Az enabled to a VPC
+  #
+  # Setting it to that deployment's existing group name is a no-op instead, and no
+  # database is touched.
+  name        = var.rds_subnet_group_name
+  name_prefix = var.rds_subnet_group_name == null ? "${var.tenant_name}-" : null
   subnet_ids  = aws_subnet.private[*].id
 
   tags = {

@@ -275,6 +275,27 @@ variable "vpc_cidr" {
   default     = "10.10.0.0/16"
 }
 
+variable "rds_subnet_group_name" {
+  description = <<-EOT
+    Existing DB subnet group name to keep, for a deployment first applied before this
+    repo used name_prefix. Null (default) lets Terraform manage the name as
+    `<tenant_name>-<suffix>`, which is right for every install created since.
+
+    Only set this when an upgrade plans to replace aws_db_subnet_group. Terraform then
+    calls ModifyDBInstance to move the live database to the new group, and RDS refuses:
+
+      InvalidParameterCombination: You cannot move a DB instance with Multi-Az enabled to a VPC
+
+    Multi-AZ makes it a hard stop; even single-AZ, repointing a running instance to
+    another group in the same VPC is not something RDS supports. Set this to the group
+    the deployment already has — `terraform state show aws_db_subnet_group.this` or
+    `aws rds describe-db-instances --query 'DBInstances[0].DBSubnetGroup.DBSubnetGroupName'`
+    — and the replacement disappears.
+  EOT
+  type        = string
+  default     = null
+}
+
 variable "rds_instance_class" {
   description = "RDS Postgres instance class. db.t4g.small is the SaaS default and fits comfortably up to ~50 employees; upsize for larger orgs."
   type        = string

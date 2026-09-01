@@ -630,6 +630,41 @@ points at *then*, with no migration having run. Pinning every image to
 one named version removes that: an upgrade is `app_image_tag`, plan,
 apply, and `db_migrate` gates the whole thing.
 
+### If an upgrade plans to replace the RDS subnet group
+
+A deployment first applied before this repo moved to `name_prefix` has a subnet
+group named exactly `<tenant_name>`. Current Terraform generates
+`<tenant_name>-<suffix>`, so the plan wants to replace the group — and then calls
+`ModifyDBInstance` to move the live database onto the new one. RDS refuses:
+
+```
+Error: updating RDS DB Instance (<tenant>): api error InvalidParameterCombination:
+You cannot move a DB instance with Multi-Az enabled to a VPC
+```
+
+Multi-AZ makes it a hard stop. Even single-AZ, repointing a running instance to
+another subnet group in the same VPC is not something RDS supports, and Terraform
+cannot sequence around it: `create_before_destroy` would plan the database itself
+create-before-destroy and fail on `DBInstanceAlreadyExists`, because
+`aws_db_instance` carries a fixed `identifier`.
+
+Nothing about the group actually needs to change — only the name's form. Keep the
+existing one:
+
+```sh
+terraform state show aws_db_subnet_group.this | grep '^\s*name '
+# or, if state is unavailable:
+aws rds describe-db-instances --db-instance-identifier <tenant_name> \
+  --query 'DBInstances[0].DBSubnetGroup.DBSubnetGroupName' --output text
+```
+
+```hcl
+rds_subnet_group_name = "<that name>"
+```
+
+The replacement disappears and no database is touched. Leave the variable unset on
+any deployment created since — Terraform manages the name, and this does not apply.
+
 ### One-time: upgrading a deployment first applied before v1.0.0
 
 **Only deployments whose last apply predates the v1.0.0 tag need this.** Check
