@@ -115,9 +115,18 @@ resource "aws_secretsmanager_secret" "sso_connector" {
 }
 
 resource "aws_secretsmanager_secret_version" "sso_connector" {
-  for_each = aws_secretsmanager_secret.sso_connector
+  # Keyed off the variable, not off aws_secretsmanager_secret.sso_connector. for_each keys
+  # must be known at plan time, and a resource map reads as wholly unknown while its
+  # instances are still to be created — so keying off the resource fails the first apply
+  # of any company that actually has connectors:
+  #
+  #   Invalid for_each argument: aws_secretsmanager_secret.sso_connector will be known
+  #   only after apply
+  #
+  # The key set is identical either way, so instance addresses do not move.
+  for_each = toset(var.company.sso_connectors)
 
-  secret_id = each.value.id
+  secret_id = aws_secretsmanager_secret.sso_connector[each.key].id
 
   # A placeholder, so the data source below has a version to read on the first apply.
   # Dex rejects a connector with no type, so this fails visibly rather than admitting
@@ -154,7 +163,8 @@ resource "aws_secretsmanager_secret_version" "company_sso" {
 # assemble the array, and it is why the values land in state — see the note on
 # local.dex_connectors.
 data "aws_secretsmanager_secret_version" "sso_connector" {
-  for_each = aws_secretsmanager_secret_version.sso_connector
+  # Same reason as the resource above: static keys, resource reference in the value.
+  for_each = toset(var.company.sso_connectors)
 
-  secret_id = each.value.secret_id
+  secret_id = aws_secretsmanager_secret_version.sso_connector[each.key].secret_id
 }
