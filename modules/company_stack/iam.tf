@@ -1,6 +1,5 @@
-# Per-company task / Lambda role. Every ARN is prefixed with
-# ${project}/${tenant}/${name} so a company can only reach its own resources
-# even when it shares a workspace with siblings.
+# Task / Lambda role. Every ARN is prefixed with
+# ${project}/${tenant}/${name} so the role can only reach its own resources.
 
 data "aws_iam_policy_document" "task_assume" {
   statement {
@@ -19,8 +18,6 @@ resource "aws_iam_role" "task" {
   tags = local.tags
 }
 
-# Account-wide Grafana Cloud logging creds (grafana_user_id / grafana_api_key).
-# Absent in byoc: these are Ewake's credentials, and every log line would ship to Ewake.
 data "aws_secretsmanager_secret" "grafana" {
   count = local.is_byoc ? 0 : 1
   name  = "grafana"
@@ -44,7 +41,7 @@ data "aws_iam_policy_document" "task" {
     ]
   }
 
-  # This company's own path, where the app creates, rotates and deletes integration secrets.
+  # The path where the app creates, rotates and deletes integration secrets.
   statement {
     sid = "SecretsScopedToCompany"
     actions = [
@@ -62,12 +59,6 @@ data "aws_iam_policy_document" "task" {
     ]
   }
 
-  # Fleet-wide secrets, read-only: a write here reaches every other tenant, and nothing needs one.
-  # The app only reads them, and this role doubles as the ECS execution role, which needs no more
-  # than a read to inject them into the task. Every entry here is Ewake-account only — in byoc all
-  # of them collapse to null and the dynamic block omits the statement entirely (an empty Resource
-  # list would fail policy validation). The per-company `app` secret used in byoc lives under
-  # ${ssm_path}/* and is already covered by SecretsScopedToCompany above.
   dynamic "statement" {
     for_each = length(local.shared_secret_arns) > 0 ? [local.shared_secret_arns] : []
     content {
@@ -96,7 +87,7 @@ data "aws_iam_policy_document" "task" {
     ]
   }
 
-  # Write to this company's <tenant>/<company name>/ prefix in the shared database-dumps bucket.
+  # Write to the <tenant>/<company name>/ prefix in the database-dumps bucket.
   statement {
     sid     = "DatabaseDumpsScopedToCompany"
     actions = ["s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"]
@@ -105,14 +96,13 @@ data "aws_iam_policy_document" "task" {
     ]
   }
 
-  # A company can never read a sibling's documents.
   statement {
     sid       = "IngestionReadScopedToCompany"
     actions   = ["s3:GetObject"]
     resources = ["arn:aws:s3:::${var.project_name}-ingestion/${var.tenant_name}/${var.company.name}/*"]
   }
 
-  # Directory-mode ingestion needs list access; the s3:prefix condition blocks siblings.
+  # Directory-mode ingestion needs list access; the s3:prefix condition scopes it.
   statement {
     sid       = "IngestionListScopedToCompany"
     actions   = ["s3:ListBucket"]

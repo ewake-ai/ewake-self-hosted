@@ -1,4 +1,4 @@
-# The only thing that applies the Postgres chains in either deployment mode — reactive's
+# The only thing that applies the Postgres chains — reactive's
 # entrypoint deliberately does not migrate at boot.
 
 resource "aws_cloudwatch_log_group" "ecs_db_migrate" {
@@ -11,10 +11,10 @@ resource "aws_cloudwatch_log_group" "ecs_db_migrate" {
 }
 
 # Its own execution role rather than reactive's: that one carries secrets CRUD
-# across the whole company path, S3 delete, SQS send, unscoped Bedrock invoke and
-# the cross-account BYOC assume — none of which this task needs to read one
-# secret, run three chains and exit. Anything pulled into the image's dependency
-# tree would otherwise inherit the lot.
+# across the whole deployment path, S3 delete, SQS send and unscoped Bedrock
+# invoke — none of which this task needs to read one secret, run three chains
+# and exit. Anything pulled into the image's dependency tree would otherwise
+# inherit the lot.
 data "aws_iam_policy_document" "db_migrate_execution_assume" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -85,13 +85,13 @@ resource "aws_ecs_task_definition" "db_migrate" {
     merge(local.is_byoc ? {
       # The image's own migrate entrypoint rather than an inline chain. It runs the three
       # migrations in their load-bearing order (mastra's 0000 moves a table the common chain
-      # creates) and then dist/common/db/seed.js, which seeds the company row, the Ewake
-      # system user and the ADMIN_PASSWORD hash. Reactive used to seed itself and no longer
+      # creates) and then dist/common/db/seed.js, which seeds the company row, the system
+      # user and the ADMIN_PASSWORD hash. Reactive used to seed itself and no longer
       # does, so spelling the chains out here would silently skip all three.
       command = ["sh", "src/reactive/docker-migrate.sh"]
       } : {}, {
       name = "db-migrate"
-      # CI overrides this per deploy; only a new company's first apply uses it.
+      # CI overrides this per deploy; only the first apply uses it.
       image     = var.db_migrate_image_uri
       essential = true
       environment = [

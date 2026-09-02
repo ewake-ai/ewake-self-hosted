@@ -17,9 +17,9 @@ resource "aws_iam_role" "dlm_default" {
   description = "Default role for AWS Data Lifecycle Manager, managed by this deployment."
 
   # Account-global name. If the customer has any unrelated DLM policy in this
-  # account (an EBS backup lifecycle set up outside byoc), destroying this role
-  # silently stops those snapshots too. Force `terraform state rm` before destroy
-  # so the removal is a deliberate act, not a side effect of tearing down byoc.
+  # account (an EBS backup lifecycle set up outside this deployment), destroying
+  # this role silently stops those snapshots too. Force `terraform state rm` before
+  # destroy so the removal is a deliberate act, not a side effect of tearing this down.
   lifecycle {
     prevent_destroy = true
   }

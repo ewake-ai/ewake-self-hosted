@@ -3,9 +3,9 @@ locals {
 
   log_clustering_sidecar_url = local.log_clustering_sidecar_enabled ? "http://${local.task_host}:8000" : null
 
-  # One process per company, deliberately: the miner keeps state across requests, and
-  # sharing it between two companies on the same stack silently rewrote up to 100% of
-  # one's templates. Do not consolidate this per-tenant the way the Lambda is.
+  # A single process, deliberately: the miner keeps state across requests, so
+  # sharing one between separate workloads silently rewrote up to 100% of one's
+  # templates.
   log_clustering_sidecar_containers = local.log_clustering_sidecar_enabled ? [{
     name      = "log-clustering"
     image     = "${var.ecr_repository_urls["log-clustering-sidecar"]}:latest"
@@ -36,5 +36,5 @@ resource "aws_vpc_security_group_ingress_rule" "log_clustering_self" {
   from_port                    = 8000
   to_port                      = 8000
   ip_protocol                  = "tcp"
-  description                  = "log-clustering sidecar on 8000, from the Lambdas of this company only"
+  description                  = "log-clustering sidecar on 8000, from this deployment's Lambdas only"
 }

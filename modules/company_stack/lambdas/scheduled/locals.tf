@@ -16,9 +16,8 @@ locals {
     LANGSMITH_API_KEY  = local.langsmith_secret["API_KEY"]
   } : {}
 
-  # Shared env vars across the scheduled fleet. DD_SERVICE is set per-Lambda
-  # in each <lambda>.tf — these used to share "ambient" as their DD_SERVICE,
-  # we now split per-Lambda.
+  # Shared env vars across the scheduled Lambdas. DD_SERVICE is set per-Lambda
+  # in each <lambda>.tf.
   scheduled_lambda_env_common = merge({
     NODE_ENV = "production"
     # DEP0040: transitive node-fetch@2 (via @google-cloud/logging and @datadog/datadog-api-client)

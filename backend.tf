@@ -19,7 +19,7 @@ terraform {
   #
   #   terraform init \
   #     -backend-config=bucket=<customer>-ewake-terraform-state \
-  #     -backend-config=key=byoc/terraform.tfstate \
+  #     -backend-config=key=ewake/terraform.tfstate \
   #     -backend-config=region=<aws_region>
   #
   # See README.md for the full bootstrap. `use_lockfile` locks through a .tflock

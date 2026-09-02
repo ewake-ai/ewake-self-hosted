@@ -1,10 +1,8 @@
-# Per-company database, roles, pgvector extension, and grants on the tenant's
-# RDS instance. All created by the tenant's RDS bootstrap Lambda
-#, which runs inside the tenant VPC
-# and has direct network access to RDS. Replaces the cyrilgdn/postgresql
-# provider — terraform applies no longer need an SSM tunnel.
+# Database, roles, pgvector extension, and grants on the RDS instance. All
+# created by the RDS bootstrap Lambda, which runs inside the VPC and has direct
+# network access to RDS.
 #
-# Two roles per company:
+# Two roles:
 #   <company>_app  →  read-write, owns the database. The ECS task uses these
 #                     credentials via the {ssm_path}/db secret.
 #   <company>_ro   →  read-only on the public schema (existing + future
@@ -56,13 +54,12 @@ resource "aws_secretsmanager_secret_version" "company_db_ro" {
   })
 }
 
-# Invokes the tenant's bootstrap Lambda once at company-create time. The
+# Invokes the bootstrap Lambda once at create time. The
 # default lifecycle_scope ("CREATE") means the invocation does NOT re-run on
 # subsequent applies, so changes that should reflect in the DB (password
 # rotation, db rename, role rename, new extension) require an explicit
 # `terraform taint module.company["<name>"].aws_lambda_invocation.bootstrap_db`
-# to fire again. The Lambda function itself stays available for new
-# companies added to the tenant. Delete is a no-op inside the Lambda.
+# to fire again. Delete is a no-op inside the Lambda.
 resource "aws_lambda_invocation" "bootstrap_db" {
   function_name = var.bootstrap_lambda_function_name
 

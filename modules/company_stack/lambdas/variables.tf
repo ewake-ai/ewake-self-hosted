@@ -59,18 +59,18 @@ variable "neo4j_password" {
 }
 
 variable "datadog_base_env" {
-  description = "Datadog env shared by every Lambda in company_stack, computed once by the parent so the two child modules cannot drift. Empty in byoc. Per-runtime keys are merged on top by the Lambda that needs them."
+  description = "Datadog env shared by every Lambda in company_stack, computed once by the parent so the two child modules cannot drift. Per-runtime keys are merged on top by the Lambda that needs them."
   type        = map(string)
 }
 
 variable "datadog_api_key" {
-  description = "Raw Datadog API key for the reactive Lambda's agentless feature-flag source. Plaintext, not JSON, so it needs no jsondecode. Nullable — null in byoc, where flags stay off."
+  description = "Raw Datadog API key for the reactive Lambda's agentless feature-flag source. Plaintext, not JSON, so it needs no jsondecode. Nullable — null when flags are off."
   type        = string
   sensitive   = true
 }
 
 variable "deployment_mode" {
-  description = "saas or byoc. No default: a default could only ever fail open."
+  description = "No default: a default could only ever fail open."
   type        = string
 }
 
@@ -120,7 +120,7 @@ variable "cloudwatch_mcp_url" {
 }
 
 variable "log_clustering_sidecar_url" {
-  description = "Base URL of this company's log-clustering sidecar, or null when the feature is off. Null means the agent runtime keeps invoking the per-tenant Lambda."
+  description = "Base URL of the log-clustering sidecar, or null when the feature is off. Null means the agent runtime keeps invoking the Lambda."
   type        = string
 }
 
@@ -133,43 +133,43 @@ variable "log_clustering_function_name" {
 }
 
 variable "langsmith_enabled" {
-  description = "False in byoc, where the Ewake-owned \"langsmith\" secret does not exist and no trace may leave the customer account."
+  description = "Whether LangSmith tracing is enabled."
   type        = bool
 }
 
 variable "github_app_enabled" {
-  description = "True when the shared GitHub App secret is provisioned. Same bool-gate-not-secret-gate pattern as langsmith_enabled."
+  description = "True when the GitHub App secret is provisioned. Same bool-gate-not-secret-gate pattern as langsmith_enabled."
   type        = bool
 }
 
 variable "github_app_secret_string" {
-  description = "Raw JSON of the shared GitHub App secret (CLIENT_ID, CLIENT_SECRET, APP_PRIVATE_KEY). Decoded inside the module and injected as env vars. Nullable — read only when github_app_enabled is true."
+  description = "Raw JSON of the GitHub App secret (CLIENT_ID, CLIENT_SECRET, APP_PRIVATE_KEY). Decoded inside the module and injected as env vars. Nullable — read only when github_app_enabled is true."
   type        = string
   sensitive   = true
 }
 
 variable "datadog_enabled" {
-  description = "False in byoc: Ewake's own telemetry (agent, Lambda extension, forwarder) must not run in a customer account. The customer-facing Datadog *integration* is unaffected."
+  description = "Whether the Datadog agent, Lambda extension, and forwarder run."
   type        = bool
 }
 
 variable "elasticsearch_enabled" {
-  description = "company.features.elasticsearch AND not byoc. The cluster is Ewake's shared instance, so a customer account must never index into it."
+  description = "Whether Elasticsearch indexing is enabled."
   type        = bool
 }
 
 variable "internal_reactive_base_url" {
-  description = "In-VPC base URL of this company's reactive task (Cloud Map name, port 3000). Injected as EWAKE_BASE_URL so internal calls do not resolve the public ALB and hairpin through NAT."
+  description = "In-VPC base URL of the reactive task (Cloud Map name, port 3000). Injected as EWAKE_BASE_URL so internal calls do not resolve the public ALB and hairpin through NAT."
   type        = string
 }
 
 variable "internal_sg_id" {
-  description = "Per-company security group granting access to the reactive task's internal ports. Every Lambda that calls the internal API joins it."
+  description = "Security group granting access to the reactive task's internal ports. Every Lambda that calls the internal API joins it."
   type        = string
 }
 
 variable "company_base_url" {
-  description = "This company's own https URL. Not read by these functions, but the application requires the base URLs at startup in every runtime."
+  description = "The deployment's own https URL. Not read by these functions, but the application requires the base URLs at startup in every runtime."
   type        = string
 }
 
@@ -183,11 +183,6 @@ variable "sso_base_url" {
   type        = string
 }
 
-# Half of the Secrets Manager path every integration credential is written under,
-# ewake/<TENANT>/<CLIENT>/integrations/... . Passed in rather than read from
-# terraform.workspace: byoc has no workspaces, so the workspace is the literal
-# "default" and these functions looked under a prefix nothing writes to and
-# iam.tf does not grant.
 variable "tenant_name" {
   type = string
 }
