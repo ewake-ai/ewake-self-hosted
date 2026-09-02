@@ -46,6 +46,9 @@ resource "aws_security_group" "vpc_link" {
 
   lifecycle {
     create_before_destroy = true
+    # description is immutable in AWS; ignore drift so a wording change never forces
+    # a replacement of the live security group.
+    ignore_changes = [description]
   }
 
   egress {

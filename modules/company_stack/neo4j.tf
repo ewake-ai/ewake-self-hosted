@@ -97,6 +97,12 @@ resource "aws_security_group" "neo4j" {
   description = "Neo4j bolt ingress from the ECS task SG only"
   vpc_id      = var.vpc_id
 
+  lifecycle {
+    # description is immutable in AWS; ignore drift so a wording change never forces
+    # a replacement of the live security group.
+    ignore_changes = [description]
+  }
+
   ingress {
     from_port       = 7687
     to_port         = 7687

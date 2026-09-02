@@ -1,5 +1,3 @@
-# See vpc.tf for the duplication note.
-
 resource "aws_security_group" "alb" {
   # name_prefix, not name: a security group's description is immutable in AWS, so editing it
   # forces replacement — and a replacement of a fixed-name group fails with
@@ -12,6 +10,10 @@ resource "aws_security_group" "alb" {
 
   lifecycle {
     create_before_destroy = true
+    # description is immutable in AWS: changing its text forces a replacement of the
+    # live security group. Ignore drift so a wording change never churns an existing
+    # deployment; a fresh install still gets whatever text is set here.
+    ignore_changes = [description]
   }
 
   ingress {
@@ -43,13 +45,18 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "ecs_task" {
-  # Ingress is deliberately NOT inline:
-  # for the full explanation. company_stack's rules live on its own SG
+  # Ingress is deliberately NOT inline: the module's rules live on its own SG
   # (modules/company_stack/task_discovery.tf), so nothing attaches here but
   # ecs_task_from_alb below.
   name        = "${var.tenant_name}-ecs-task"
   description = "ECS task ingress from the ALB only"
   vpc_id      = aws_vpc.this.id
+
+  lifecycle {
+    # description is immutable in AWS; ignore drift so a wording change never forces
+    # a replacement of the live security group.
+    ignore_changes = [description]
+  }
 
   egress {
     from_port   = 0
@@ -75,6 +82,12 @@ resource "aws_security_group" "rds" {
   name        = "${var.tenant_name}-rds"
   description = "RDS Postgres ingress from ECS tasks in this VPC only"
   vpc_id      = aws_vpc.this.id
+
+  lifecycle {
+    # description is immutable in AWS; ignore drift so a wording change never forces
+    # a replacement of the live security group.
+    ignore_changes = [description]
+  }
 
   ingress {
     from_port       = 5432
