@@ -69,7 +69,7 @@ variable "sso_base_url" {
 #     each completes on an Ewake-hosted callback. Manifest-based Slack install is
 #     unaffected, and login is unaffected: that is the Dex sidecar on this origin.
 #   - Slack team-route registration against the orchestrator is skipped.
-# See src/reactive/server/routers/api/v1/index.ts for the branch points.
+# See the API route table in the README for the paths involved.
 variable "orchestrator_url" {
   description = "Public HTTPS URL of the shared orchestrator service (terraform/shared orchestrator module 'url' output). The reactive admin API calls it to list/remove Slack team routes. Null in byoc — there is no orchestrator, and the app runs in standalone mode (see the comment above for exactly what that changes)."
   type        = string
@@ -221,7 +221,7 @@ variable "jwt_secret_arn" {
 }
 
 variable "slack_secret_arn" {
-  description = "Secrets Manager ARN of Ewake's own Slack app credentials, used for the hosted OAuth install flow (JSON with CLIENT_ID, CLIENT_SECRET, AUTH_URL, SIGNING_SECRET). Null in byoc — NOT because Slack is unavailable there, but because a byoc customer installs their own Slack app from a generated manifest and supplies its bot token + signing secret directly (src/reactive/server/routers/api/v1/integration/slack.ts). Those land in the per-company integration secret, and inbound events are signature-verified against it locally, so no orchestrator is involved on either the install or the receive path."
+  description = "Secrets Manager ARN of Ewake's own Slack app credentials, used for the hosted OAuth install flow (JSON with CLIENT_ID, CLIENT_SECRET, AUTH_URL, SIGNING_SECRET). Null in byoc — NOT because Slack is unavailable there, but because a byoc customer installs their own Slack app from a generated manifest and supplies its bot token + signing secret directly. Those land in the per-company integration secret, and inbound events are signature-verified against it locally, so no orchestrator is involved on either the install or the receive path."
   type        = string
   default     = null
   nullable    = true
@@ -318,7 +318,7 @@ locals {
   ssm_path   = "${var.project_name}/${var.tenant_name}/${var.company.name}"
 
   # This deployment's own public origin — every absolute URL the app hands to a browser,
-  # a provider, or Slack. Stated here rather than left to src/core/config, whose fallback
+  # a provider, or Slack. Stated here rather than left to the application's fallback,
   # is `https://${CLIENT}.ewake.ai` with our domain hardcoded: right by luck on saas, and
   # in byoc a URL on Ewake's domain that the customer does not own and DNS cannot resolve.
   # The one name this deployment answers on. Route53, the listener rule and every

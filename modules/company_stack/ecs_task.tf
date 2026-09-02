@@ -102,13 +102,12 @@ resource "aws_ecs_task_definition" "reactive" {
         { name = "AWS_ACCOUNT_ID", value = data.aws_caller_identity.current.account_id },
         { name = "CLIENT", value = var.company.name },
         { name = "COMPANY_DOMAIN", value = var.company.domain },
-        # var.tenant_name, not terraform.workspace. Identical on saas (tenants/main.tf sets
-        # tenant_name = terraform.workspace) but byoc has no workspaces, so the workspace is
-        # the literal "default" — and TENANT is half the frontend pointer key the app reads,
-        # pointers/<TENANT>/<CLIENT>.json. It went looking for pointers/default/acme.json,
-        # a path iam.tf does not even grant, and fell back to the channel every time.
+        # var.tenant_name, not terraform.workspace. This deployment uses no workspaces, so
+        # the workspace is the literal "default". TENANT is half the key the application uses
+        # to resolve frontend assets and integration secrets, so a wrong value here reads from
+        # a path that was never written and that iam.tf does not grant.
         { name = "TENANT", value = var.tenant_name },
-        # Absent, src/core/config falls back to `https://${CLIENT}.ewake.ai` — our domain.
+        # Absent, the application falls back to a default hostname it does not serve.
         { name = "EWAKE_BASE_URL", value = local.company_base_url },
         # Required at config import, and named for who reaches each. Identical behind a public
         # ALB; a private one moves only the first onto its public entry point.
@@ -122,7 +121,7 @@ resource "aws_ecs_task_definition" "reactive" {
         { name = "LOG_CLUSTERING_SIDECAR_URL", value = local.log_clustering_sidecar_url },
         ] : [], [
         # Dashboard API — low usage, and its ceiling doubles during a rolling
-        # deploy. Budget lives in src/core/db.
+        # deploy. The connection budget is shared across all runtimes.
         { name = "POSTGRES_POOL_MAX", value = "3" },
         # Reactive is an OIDC client of the dex sidecar; the id has to be the same one
         # dex.tf registers as the static client.

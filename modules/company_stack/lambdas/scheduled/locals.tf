@@ -33,14 +33,14 @@ locals {
     POSTGRES_USER     = "${var.company.name}_app"
     POSTGRES_PASSWORD = var.postgres_password
     # Background work — smallest pool of the three runtimes so the reactive
-    # Lambda keeps slots available. Budget lives in src/core/db.
+    # Lambda keeps slots available. The connection budget is shared across all runtimes.
     POSTGRES_POOL_MAX            = "2"
     NEO4J_URI                    = var.neo4j_uri
     NEO4J_USERNAME               = var.neo4j_username
     NEO4J_PASSWORD               = var.neo4j_password
     AMBIENT_AGENT_PERIOD_MINUTES = 15
-    # Unread by these functions, but src/core/config requires them at import and
-    # src/core/logger pulls config into every runtime.
+    # Unread by these functions, but the application requires them at startup in
+    # every runtime.
     PUBLIC_INBOUND_BASE_URL      = var.public_inbound_base_url
     DASHBOARD_BASE_URL           = var.company_base_url
     INTERNAL_BASE_URL            = var.company_base_url

@@ -77,7 +77,7 @@ variable "langsmith_secret_string" {
 }
 
 variable "lambda_bundle_image_uri" {
-  description = "Consolidated image holding all nine scheduled handlers; each function selects its own via image_config. Replaces the nine ewake-lambda-<name> repos retired in ewake-ai/back#3124."
+  description = "Consolidated image holding all nine scheduled handlers; each function selects its own via image_config. Replaces the nine per-function ewake-lambda-<name> repositories."
   type        = string
 }
 
@@ -127,7 +127,7 @@ variable "datadog_api_key" {
 }
 
 variable "company_base_url" {
-  description = "This company's own https URL. Not read by these functions — src/core/config requires the base URLs at import, and src/core/logger pulls config into every runtime."
+  description = "This company's own https URL. Not read by these functions, but the application requires the base URLs at startup in every runtime."
   type        = string
 }
 
@@ -150,8 +150,8 @@ variable "tenant_name" {
   type = string
 }
 
-# Neither is read by these functions. src/core/config requires both at import and
-# src/core/logger pulls config into every runtime, so a missing one exits the
+# Neither is read by these functions. The application requires both at startup in
+# every runtime, so a missing one exits the
 # handler before it runs — the same shape as the base URLs above.
 variable "jwt_secret" {
   type      = string

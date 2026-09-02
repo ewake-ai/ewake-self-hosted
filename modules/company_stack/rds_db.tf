@@ -62,8 +62,7 @@ resource "aws_secretsmanager_secret_version" "company_db_ro" {
 # rotation, db rename, role rename, new extension) require an explicit
 # `terraform taint module.company["<name>"].aws_lambda_invocation.bootstrap_db`
 # to fire again. The Lambda function itself stays available for new
-# companies added to the tenant. Delete is a no-op inside the Lambda — see
-# src/lambdas/rds-bootstrap/handler.py.
+# companies added to the tenant. Delete is a no-op inside the Lambda.
 resource "aws_lambda_invocation" "bootstrap_db" {
   function_name = var.bootstrap_lambda_function_name
 

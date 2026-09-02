@@ -1,5 +1,5 @@
 output "dashboard_url" {
-  description = "Public URL of the reactive dashboard. Log in via the OIDC IdP configured in company_stack (see PR #3014 stack)."
+  description = "Public URL of the dashboard. Log in via the OIDC IdP configured in company_stack."
   value       = "https://${local.company_host}"
 }
 

@@ -169,7 +169,7 @@ variable "internal_sg_id" {
 }
 
 variable "company_base_url" {
-  description = "This company's own https URL. Not read by these functions — src/core/config requires the base URLs at import, and src/core/logger pulls config into every runtime."
+  description = "This company's own https URL. Not read by these functions, but the application requires the base URLs at startup in every runtime."
   type        = string
 }
 

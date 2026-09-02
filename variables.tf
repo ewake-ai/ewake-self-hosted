@@ -73,7 +73,7 @@ variable "company_host" {
 
     Set it to var.root_domain to serve the zone apex instead. That is the byoc
     case where the customer delegates a subdomain of a domain they own (e.g.
-    ewake.qonto.co) and wants to be reached at exactly that name, with no
+    ewake.example.com) and wants to be reached at exactly that name, with no
     further prefix in front of it.
 
     Constrained to root_domain or a single label under it because acm.tf issues
@@ -362,7 +362,7 @@ locals {
   }
 
   # Container-image Lambdas company_stack consumes via var.lambda_image_uris.
-  # Only reactive is left: ewake-ai/back#3124 folded the nine scheduled Lambdas
+  # Only reactive is left: the nine scheduled Lambdas are folded
   # into the single ewake-lambdas bundle below and deleted their per-Lambda
   # ECR repos, so pinning them here would resolve to tags CI no longer moves.
   # rds-bootstrap and log-clustering are NOT here — they are pinned to :latest
