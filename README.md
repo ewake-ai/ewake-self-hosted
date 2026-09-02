@@ -8,56 +8,124 @@ Ewake grants that access to your account ID before your first apply.
 
 ## Prerequisites
 
-1. **A supported region.** Today that is **`eu-west-3`** (Paris) only.
-   Ewake's container images are published there; any other region fails at
-   image pull. Terraform rejects unsupported values at `plan`. If you need
-   a different region, let us know — adding one is quick on our side.
+Six things must be ready before your first apply. Items 2, 3 and 5 usually need
+another team, so request them first.
 
-2. **A dedicated AWS account.** We recommend a standalone account so the
-   deployment's VPC, IAM roles, and security groups don't overlap with your
-   other workloads.
+| # | What you need | Usually owned by |
+| - | ------------- | ---------------- |
+| 1 | Terraform >= 1.10 and the AWS CLI | you |
+| 2 | A dedicated AWS account in `eu-west-3` | your cloud team |
+| 3 | A domain delegated to a Route53 zone in that account | your DNS team |
+| 4 | An OIDC identity provider | your identity team |
+| 5 | Bedrock access to five models | your AWS account owner |
+| 6 | Network access to the deployment, if it is private | your network team |
 
-3. **A domain** (or subdomain — e.g. `ewake.yourcompany.com`) delegated to
-   a **Route53 hosted zone in the same AWS account**. The install creates
-   an ACM certificate validated against that zone. See [Route53 setup](#route53-hosted-zone)
-   below.
+### 1. Terraform and the AWS CLI
 
-4. **An OIDC identity provider** (Okta, Entra ID, Google Workspace, Auth0,
-   or any spec-compliant provider). You'll register Ewake as an application
-   in your IdP and configure SSO connectors — see [SSO setup](#4-sso--single-sign-on).
+Terraform 1.10 or newer, and the AWS CLI. Both must authenticate as the same
+principal. Terraform locks state with an S3 `.tflock` object, which older
+versions reject at `init`.
 
-5. **AWS Bedrock model access.** Enable the following models in the
-   `eu-west-3` region via the AWS Console → Bedrock → Model access. These are
-   the exact IDs the runtime invokes (`src/common/utils/LLM/models.ts`); the
-   `eu.` prefix is a cross-region inference profile, so the console lists each
-   one under its underlying model name:
-   - `eu.anthropic.claude-opus-4-5-20251101-v1:0`
-   - `eu.anthropic.claude-sonnet-4-6`
-   - `eu.anthropic.claude-sonnet-4-5-20250929-v1:0`
-   - `eu.anthropic.claude-haiku-4-5-20251001-v1:0`
-   - `cohere.embed-multilingual-v3`
+### 2. A dedicated AWS account in `eu-west-3`
 
-   Enable all five. A partial grant fails in a way that reads like a product
-   bug rather than a missing entitlement: the parent agent runs on Opus, so it
-   answers, while every sub-agent runs on Haiku with Sonnet 4.5 behind it — so
-   an account missing those two returns a fluent reply that has investigated
-   nothing, and buries the cause in an AWS Marketplace error naming
-   `aws-marketplace:ViewSubscriptions`.
+`eu-west-3` (Paris) is the only supported region today. Ewake publishes its
+container images there, so any other region fails when pulling images.
+Terraform rejects an unsupported region at `plan`. Tell us if you need another
+region — adding one is quick on our side.
 
-   Verify with a call per model rather than by reading the console:
+Use a standalone account. This keeps the deployment's VPC, IAM roles and
+security groups separate from your other workloads.
 
-   ```bash
-   aws bedrock-runtime invoke-model --region eu-west-3 \
-     --model-id eu.anthropic.claude-haiku-4-5-20251001-v1:0 \
-     --content-type application/json \
-     --body "$(echo '{"anthropic_version":"bedrock-2023-05-31","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}' | base64)" \
-     /dev/null
-   ```
+### 3. A domain delegated to Route53
 
-6. **Terraform >= 1.10** and the **AWS CLI**, both authenticated as the
-   same principal. Terraform locks state with an S3 `.tflock` object
-   (older versions reject this at `init`).
+A domain or subdomain, for example `ewake.yourcompany.com`, delegated to a
+**Route53 hosted zone in the same AWS account**. The install creates an ACM
+certificate and validates it against that zone.
 
+If you cannot delegate a public zone, you can bring your own certificate
+instead. See [If you can't delegate a public zone](#if-you-cant-delegate-a-public-zone).
+
+### 4. An OIDC identity provider
+
+Okta, Entra ID, Google Workspace, Auth0, or any spec-compliant provider. You
+register Ewake as an application in your IdP. See [Configure SSO](#2-configure-sso).
+
+You can also start without one. Ewake then serves a username and password form,
+and Terraform generates an admin password for you. Add SSO later.
+
+### 5. Bedrock access to five models
+
+Ewake calls five models. Your account needs a Marketplace agreement for **all
+five**:
+
+```
+eu.anthropic.claude-opus-4-5-20251101-v1:0
+eu.anthropic.claude-sonnet-4-6
+eu.anthropic.claude-sonnet-4-5-20250929-v1:0
+eu.anthropic.claude-haiku-4-5-20251001-v1:0
+cohere.embed-multilingual-v3
+```
+
+The `eu.` prefix means a cross-region inference profile. The AWS Console lists
+each one under its underlying model name.
+
+> **Enable all five. Partial access is worse than none.**
+> The main agent runs on Opus, and every sub-agent runs on Haiku with Sonnet 4.5
+> behind it. If you enable only Opus, Ewake still answers you fluently, but it
+> has investigated nothing. This looks like a product bug, not a missing
+> entitlement. The real cause is buried in an AWS Marketplace error naming
+> `aws-marketplace:ViewSubscriptions`.
+
+**Check whether an agreement is missing.** Use the base model ID, not the `eu.`
+profile ID:
+
+```bash
+aws bedrock get-foundation-model-availability --region eu-west-3 \
+  --model-id anthropic.claude-haiku-4-5-20251001-v1:0
+```
+
+`agreementAvailability: NOT_AVAILABLE` is the answer that matters. Ignore
+`authorizationStatus`, `entitlementAvailability` and `regionAvailability` here.
+
+**Accept an agreement.** The AWS docs describe a console flow, but the CLI is
+reliable. Run two commands per model, again with the base model ID:
+
+```bash
+MODEL=anthropic.claude-haiku-4-5-20251001-v1:0
+
+token=$(aws bedrock list-foundation-model-agreement-offers --region eu-west-3 \
+  --model-id "$MODEL" --query 'offers[0].offerToken' --output text)
+
+aws bedrock create-foundation-model-agreement --region eu-west-3 \
+  --model-id "$MODEL" --offer-token "$token"
+```
+
+> `create-foundation-model-agreement` accepts the vendor's licence terms on
+> behalf of your account. Your account owner should run it, not Ewake.
+
+If the error names IAM permissions, do not audit your IAM role. Bedrock returns
+`aws-marketplace:ViewSubscriptions` whenever the agreement is missing, whatever
+permissions the caller holds. We have seen this on an account with
+`AdministratorAccess` and no SCP.
+
+**Verify each model by calling it.** Do not verify by reading the console, where
+these appear under their underlying names and look enabled:
+
+```bash
+aws bedrock-runtime invoke-model --region eu-west-3 \
+  --model-id eu.anthropic.claude-haiku-4-5-20251001-v1:0 \
+  --content-type application/json \
+  --body "$(echo '{"anthropic_version":"bedrock-2023-05-31","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}' | base64)" \
+  /dev/null
+```
+
+### 6. Network access, if the deployment is private
+
+Skip this if your ALB will be internet-facing.
+
+If you set `alb_internal = true`, your users reach the dashboard over your own
+network. See [Reaching a private deployment](#reaching-a-private-deployment)
+for what your network team must provide.
 ## Setup
 
 ### State bucket
@@ -417,10 +485,39 @@ terraform plan
 terraform apply
 ```
 
-The first apply takes roughly 15–20 minutes (RDS and Neo4j dominate).
-When it completes, `terraform output dashboard_url` gives you your
-Ewake dashboard URL.
+The first apply takes about 15–20 minutes. RDS and Neo4j take most of that time.
 
+### Expect the first apply to fail once
+
+**This is normal on a new install. Run `terraform apply` again.**
+
+The apply stops on the `db-migrate` task with an error like this:
+
+```
+Error: local-exec provisioner error
+db-migrate exited ... unable to assume the role ...
+verify that the role being passed has the proper trust relationship
+```
+
+The message points at a trust policy, but the trust policy is correct. The real
+cause is timing: Terraform creates the IAM role and then runs the database
+migration a few seconds later, before IAM has finished propagating the role
+across AWS.
+
+Nothing is broken and nothing needs to be changed. Run `terraform apply` again
+and it continues from where it stopped. We have seen this on every new install.
+
+If the same error appears on the **third** apply, it is no longer this race.
+Check that the `db-migrate` task role exists and that its trust policy allows
+`ecs-tasks.amazonaws.com`.
+
+### When the apply finishes
+
+```sh
+terraform output dashboard_url
+```
+
+That is your Ewake dashboard URL. Continue with [Post-install](#post-install).
 ## Post-install
 
 ### 1. Verify the dashboard loads
