@@ -22,6 +22,9 @@ resource "aws_iam_role" "dlm_default" {
   # destroy so the removal is a deliberate act, not a side effect of tearing this down.
   lifecycle {
     prevent_destroy = true
+    # description is applied state; ignore drift so a wording change is never a plan diff
+    # on an existing deployment.
+    ignore_changes = [description]
   }
 }
 

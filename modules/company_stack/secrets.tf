@@ -75,6 +75,13 @@ resource "aws_secretsmanager_secret" "app" {
   name        = "${local.ssm_path}/app"
   description = "Application secrets: ADMIN_PASSWORD, JWT_SECRET, DEX_CLIENT_SECRET, ORCHESTRATOR_SECRET."
   tags        = local.tags
+
+  lifecycle {
+    # description is applied state; ignore drift so a wording change is never a plan diff.
+    # A changed description here would also re-render the reactive task definition (it
+    # reads this secret's ARN), forcing a needless new revision.
+    ignore_changes = [description]
+  }
 }
 
 # No ignore_changes: terraform generates these and

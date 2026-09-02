@@ -15,6 +15,11 @@ resource "aws_service_discovery_private_dns_namespace" "mcp" {
   vpc         = var.vpc_id
   description = "MCP discovery namespace for ${var.company.name}"
   tags        = local.tags
+
+  lifecycle {
+    # description is applied state; ignore drift so a wording change is never a plan diff.
+    ignore_changes = [description]
+  }
 }
 
 # ECS accepts exactly one service_registries entry per service, and every container
@@ -68,4 +73,9 @@ resource "aws_vpc_security_group_ingress_rule" "internal_reactive" {
   to_port                      = 3000
   ip_protocol                  = "tcp"
   description                  = "reactive internal API, from this deployment's Lambdas only"
+
+  lifecycle {
+    # description is applied state; ignore drift so a wording change is never a plan diff.
+    ignore_changes = [description]
+  }
 }
