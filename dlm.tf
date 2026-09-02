@@ -1,9 +1,5 @@
-# AWS Data Lifecycle Manager role for the per-company Neo4j EBS snapshots.
-# company_stack's neo4j.tf hardcodes the role name
-# "AWSDataLifecycleManagerDefaultRole" (matching what the AWS console's "Create
-# default IAM role" flow uses), so the role must exist under that exact name.
-# In the SaaS shape this lives in terraform/shared/dlm.tf; in byoc every
-# customer account creates its own.
+# AWS Data Lifecycle Manager role for the Neo4j EBS snapshots. The name must be
+# exactly AWSDataLifecycleManagerDefaultRole, which neo4j.tf refers to.
 
 resource "aws_iam_role" "dlm_default" {
   name = "AWSDataLifecycleManagerDefaultRole"

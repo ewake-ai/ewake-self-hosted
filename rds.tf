@@ -1,7 +1,3 @@
-# See vpc.tf for the duplication note. Diff from terraform/tenants/rds.tf:
-# no DBM parameter group / no datadog_pg secret — DBM ships query samples to
-# Ewake's Datadog org, which a customer deployment must not do.
-
 resource "aws_db_subnet_group" "this" {
   # name_prefix by default: a fixed name cannot be replaced, and RDS refuses to drop
   # a subnet its instance sits in — so any change to the subnet set would deadlock

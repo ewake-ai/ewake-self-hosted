@@ -1,7 +1,6 @@
-# Adding a region takes an aws_ecr_replication_configuration in terraform/shared — registry-level,
-# so it covers every repository at once — and an entry in the list below.
+# Contact Ewake to add a region: the images must be replicated there first.
 variable "aws_region" {
-  description = "AWS region for this deployment. Limited to the regions Ewake replicates its images into — ask your Ewake contact if you need another."
+  description = "AWS region to deploy into. Only eu-west-3 is supported."
   type        = string
   default     = "eu-west-3"
 
@@ -11,14 +10,10 @@ variable "aws_region" {
   }
 }
 
-# The customer's own "tenant" identity — used in resource names and log prefixes.
-# Kept
-# distinct from `company.name` because the SaaS shape has one tenant to many
-# companies; in byoc they usually collapse (tenant_name == company.name), but the
-# separation stays so ARN prefixes look the same as SaaS and code that reads them
-# doesn't need a special case.
+# Usually the same as company.name. The two stay separate so resource and ARN
+# prefixes keep one shape.
 variable "tenant_name" {
-  description = "Identifier for this deployment. Lowercase alphanumeric; used in resource names and S3 pointer paths. Typically your company's short name. Capped at 21 chars because it feeds into the ALB name `$${tenant_name}-tenant-alb`, and AWS caps ALB names at 32 — a longer value fails deep into the plan, after RDS's 20-minute create."
+  description = "Identifier for this deployment. Lowercase letters and digits, starting with a letter, 21 characters maximum. Used in resource names."
   type        = string
 
   validation {
@@ -28,7 +23,7 @@ variable "tenant_name" {
 }
 
 variable "company" {
-  description = "The single company this deployment serves. Same shape as one entry in tenants/registry.json's companies map."
+  description = "The company served by this deployment: name, public_id, domain, and the SSO connector IDs to enable."
   type = object({
     name          = string
     public_id     = string
@@ -38,7 +33,7 @@ variable "company" {
     desired_count = optional(number, 1)
     # Empty is a trap: Dex refuses to start with no connectors, so the sidecar dies on boot
     # while reactive keeps serving — a healthy-looking deployment nobody can sign in to.
-    # Each redirect URI is this deployment's own host, not the orchestrator's as on saas.
+    # Each redirect URI is this deployment's own host.
     sso_connectors = optional(list(string), [])
     features = optional(object({
       elasticsearch        = optional(bool, false)
@@ -61,25 +56,12 @@ variable "company" {
 }
 
 variable "root_domain" {
-  description = "Public root domain the customer owns and delegates to Route53 in this AWS account. The reactive dashboard is served at var.company_host, which defaults to <company.name>.<root_domain>."
+  description = "Domain you own and have delegated to a Route53 hosted zone in this account."
   type        = string
 }
 
 variable "company_host" {
-  description = <<-EOT
-    Fully-qualified host the dashboard is served on. Defaults to
-    <company.name>.<root_domain> — the shape saas uses, and what every existing
-    deployment already has, so leaving it unset is a no-op.
-
-    Set it to var.root_domain to serve the zone apex instead. That is the byoc
-    case where the customer delegates a subdomain of a domain they own (e.g.
-    ewake.example.com) and wants to be reached at exactly that name, with no
-    further prefix in front of it.
-
-    Constrained to root_domain or a single label under it because acm.tf issues
-    one cert for root_domain + *.root_domain, and a wildcard matches one label
-    only: a.b.root_domain would resolve and then fail the TLS handshake.
-  EOT
+  description = "Host the dashboard is served on. Defaults to <company.name>.<root_domain>. Must be root_domain itself or one label under it, unless you supply your own certificate."
   type        = string
   default     = null
 
@@ -100,21 +82,16 @@ variable "company_host" {
   }
 }
 
-# Both default to today's public shape, so an existing deployment sees no diff.
-# Set them together: an internal ALB still needs the ingress rule narrowed, since
-# the security group is what actually refuses the packet — `internal` only removes
-# the public IPs.
-# Attaching to a customer-owned transit gateway is how a private deployment is
-# reached from their corporate network, and it replaces the SSM port-forward in
-# the README once it is up.
+# Set alb_internal and alb_ingress_cidrs together: `internal` only removes the
+# public addresses, the security group is what refuses a packet.
 variable "transit_gateway_id" {
-  description = "Transit gateway to attach this VPC to, e.g. a customer's org-level TGW shared into the account via RAM. Null (default) creates no attachment. The TGW must already be shared with this account; check `aws ec2 describe-transit-gateways` can see it before setting this."
+  description = "Transit gateway to attach this VPC to. It must already be shared with this account. Null creates no attachment."
   type        = string
   default     = null
 }
 
 variable "transit_gateway_routes" {
-  description = "CIDRs reached through var.transit_gateway_id, added to every private route table (e.g. [\"10.38.0.0/23\"] for a VPN range). Ignored when transit_gateway_id is null. Return traffic depends on the TGW's own route table propagating this VPC's CIDR, which is the TGW owner's side unless DefaultRouteTablePropagation is enabled."
+  description = "CIDRs reached through the transit gateway, added to every private route table. The gateway owner must route back to this VPC's CIDR."
   type        = list(string)
   default     = []
 
@@ -125,13 +102,13 @@ variable "transit_gateway_routes" {
 }
 
 variable "alb_internal" {
-  description = "Whether the tenant ALB is internal (private IPs, no public listener). Default false keeps the internet-facing shape. When true the ALB also moves to the private subnets, and the dashboard is reachable only from inside the VPC — over VPN, a peered network, or an SSM port-forward (see the README)."
+  description = "Give the load balancer private addresses only. Cannot be changed after the first apply."
   type        = bool
   default     = false
 }
 
 variable "alb_ingress_cidrs" {
-  description = "CIDRs allowed to reach the ALB on 443 and 80. Default is the public internet. Narrow this to the VPC CIDR (or a VPN range) for a private deployment; ACM validation is unaffected either way, since it reads DNS rather than connecting to the load balancer."
+  description = "CIDRs allowed to reach the load balancer on 443 and 80. Editable at any time."
   type        = list(string)
   default     = ["0.0.0.0/0"]
 
@@ -142,38 +119,13 @@ variable "alb_ingress_cidrs" {
 }
 
 variable "hosted_zone_id" {
-  description = <<-EOT
-    Route53 hosted zone for var.root_domain, in this account. Terraform writes
-    the ACM validation records and the dashboard's A alias here, so the zone must
-    exist before apply and be reachable from the public internet — ACM resolves
-    validation over public DNS and cannot see a private hosted zone.
-
-    Null hands DNS back to the customer: no zone is touched and no A record is
-    created. That is the shape for an organisation whose hostname lives in a
-    private zone, or in a parent zone in an account we have no access to. It
-    requires acm_certificate_arn, since without a writable public zone Terraform
-    has nowhere to prove domain control. After apply, point the hostname at the
-    `alb_dns_name` output; `dns_wiring` prints exactly what to create.
-  EOT
+  description = "Route53 hosted zone for root_domain, in this account. Terraform creates the DNS record and the certificate. Set to null to own both yourself, and supply acm_certificate_arn."
   type        = string
   default     = null
 }
 
 variable "acm_certificate_arn" {
-  description = <<-EOT
-    Existing ACM certificate for var.company_host, in var.aws_region. Null
-    (default) makes acm.tf issue and DNS-validate one in var.hosted_zone_id,
-    which is what every deployment that delegates a zone to us should do —
-    renewal is then automatic and nobody has to remember a record.
-
-    Set it when the customer owns DNS: they issue the certificate (or import
-    one from their own CA) and hand us the ARN. Two things become theirs to
-    keep alive — the certificate's renewal validation record, and the A record
-    for company_host. Neither failure is visible from this stack.
-
-    The certificate must cover var.company_host exactly; a wildcard reaches one
-    label only, so a cert for *.example.com does not serve a.b.example.com.
-  EOT
+  description = "Your own certificate for company_host, in aws_region. Required when hosted_zone_id is null. You own its renewal."
   type        = string
   default     = null
 
@@ -189,28 +141,19 @@ variable "acm_certificate_arn" {
 }
 
 variable "extra_certificate_arns" {
-  description = <<-EOT
-    Additional ACM certificates attached to the HTTPS listener as SNI
-    certificates, beyond the default one. Empty (default) is the normal shape.
-
-    This exists for hostname cutovers: serve the old name and the new one at the
-    same time, move traffic, then drop the old entry. Attaching a certificate
-    here does not route anything — the listener rule matches var.company_host,
-    so a request arriving on one of these names completes the TLS handshake and
-    then gets the listener's 404. Pair it with alb_extra_host_headers.
-  EOT
+  description = "Extra certificates on the HTTPS listener. Used during a hostname change to serve the old and new names at once."
   type        = list(string)
   default     = []
 }
 
 variable "alb_extra_host_headers" {
-  description = "Extra Host values routed to the dashboard alongside var.company_host. Empty (default) matches company_host only. Set during a hostname migration so both names serve, and remember each one also needs a certificate the listener can present — see extra_certificate_arns."
+  description = "Extra hostnames the listener routes. Used with extra_certificate_arns during a hostname change."
   type        = list(string)
   default     = []
 }
 
 variable "ewake_aws_account_id" {
-  description = "AWS account ID that owns the Ewake ECRs. Used to build every image URI (reactive, cloudwatch-mcp, log-clustering-sidecar, the ewake-lambdas bundle, every remaining ewake-lambda-*). Pull is authorized by a repository policy Ewake attaches to those repositories for your account ID. The bundle is granted separately from the per-Lambda repositories, so access to one does not imply access to the other. Defaults to Ewake's production account — override only if Ewake has told you a different one."
+  description = "AWS account that owns the Ewake image repositories. Override only if Ewake tells you to."
   type        = string
   default     = "058264427976"
 
@@ -221,24 +164,14 @@ variable "ewake_aws_account_id" {
 }
 
 
-# Lambda images only, since the dashboard stopped being served from S3: the reactive
-# image now carries its own frontend, so there is no channel pointer to resolve and
-# no artifacts bucket to read. Lambda tags do not exist for every commit, which is
-# why they still follow a channel rather than app_image_tag.
 
 variable "app_image_tag" {
-  description = "Immutable ECR tag every Ewake image in this deployment runs — the reactive service, its db-migrate task and all eleven Lambdas, e.g. \"ewake-v0.153.0\". Required: a deployment must state which build it runs. Sidecars (Dex, CloudWatch MCP, log clustering) track :latest and are not covered."
+  description = "Application version this deployment runs. Required. A moving tag such as \"stable\" is rejected, because only an apply from this repository migrates the database."
   type        = string
   nullable    = false
 
-  # Required, and a channel name is refused. Both rules exist for the same reason:
-  # nothing migrates a byoc database except an apply from this repo, and the image
-  # refuses to serve a schema behind it (assertSchemaIsCurrent). Following a mutable
-  # channel therefore means a release retagging it turns the NEXT task replacement —
-  # a deploy, a scale event, a Fargate host retirement — into an outage at a moment
-  # nobody chose, with no migration having run. Naming a version instead makes the
-  # upgrade an act: bump this, plan, apply. reactive_deploy depends_on db_migrate,
-  # so the migration always lands before the new image serves.
+  # A moving channel would let an unrelated task replacement pick up a new image
+  # with no migration having run.
   validation {
     condition     = !contains(["stable", "latest", "main"], var.app_image_tag)
     error_message = "app_image_tag must name a specific build (e.g. \"ewake-v0.153.0\"), not a channel. A channel tag moves under a running deployment and nothing here would migrate the database to match it."
@@ -251,7 +184,7 @@ variable "app_image_tag" {
 }
 
 variable "azs" {
-  description = "Availability zones for the VPC, e.g. [\"us-east-1a\", \"us-east-1b\"]. Two is the minimum for the ALB and RDS multi-AZ. Required, because a default would silently belong to one region while aws_region says another."
+  description = "Availability zones to use, two or more, all in aws_region."
   type        = list(string)
 
   validation {
@@ -270,56 +203,39 @@ variable "azs" {
 }
 
 variable "vpc_cidr" {
-  description = "IPv4 CIDR block for the VPC. /16 gives room for the subnets and NAT gateways. AWS cannot change a VPC's primary CIDR, so changing this on a live deployment means a destroy and rebuild."
+  description = "CIDR for the VPC. Changing it later requires a rebuild, not an apply."
   type        = string
   default     = "10.10.0.0/16"
 }
 
 variable "rds_subnet_group_name" {
-  description = <<-EOT
-    Existing DB subnet group name to keep, for a deployment first applied before this
-    repo used name_prefix. Null (default) lets Terraform manage the name as
-    `<tenant_name>-<suffix>`, which is right for every install created since.
-
-    Only set this when an upgrade plans to replace aws_db_subnet_group. Terraform then
-    calls ModifyDBInstance to move the live database to the new group, and RDS refuses:
-
-      InvalidParameterCombination: You cannot move a DB instance with Multi-Az enabled to a VPC
-
-    Multi-AZ makes it a hard stop; even single-AZ, repointing a running instance to
-    another group in the same VPC is not something RDS supports. Set this to the group
-    the deployment already has — `terraform state show aws_db_subnet_group.this` or
-    `aws rds describe-db-instances --query 'DBInstances[0].DBSubnetGroup.DBSubnetGroupName'`
-    — and the replacement disappears.
-  EOT
+  description = "Existing DB subnet group name to keep, for a deployment created before this repository generated the name. Leave unset otherwise. See UPGRADING.md."
   type        = string
   default     = null
 }
 
 variable "rds_instance_class" {
-  description = "RDS Postgres instance class. db.t4g.small is the SaaS default and fits comfortably up to ~50 employees; upsize for larger orgs."
+  description = "RDS instance class."
   type        = string
   default     = "db.t4g.small"
 }
 
 variable "rds_storage_gb" {
-  description = "RDS Postgres allocated storage in gigabytes."
+  description = "RDS allocated storage, in GB."
   type        = number
   default     = 50
 }
 
 variable "rds_multi_az" {
-  description = "Provision RDS in multi-AZ mode for failover. True by default; set false for a low-cost single-AZ install if you're comfortable with the tradeoff."
+  description = "Run RDS across two availability zones."
   type        = bool
   default     = true
 }
 
-# ARM-only: the Neo4j AMI is arm64-fixed, so this must be a Graviton family
-# (t4g.*, c7g.*, m7g.*). t4g.small can be capacity-constrained in secondary
-# regions (eu-west-3 in particular hangs RunInstances) — bump to t4g.medium
+# The Neo4j AMI is arm64, so this must be a Graviton family (t4g.*, c7g.*, m7g.*).
 # or larger if the first apply stalls on Neo4j.
 variable "neo4j_instance_type" {
-  description = "EC2 instance type for the Neo4j box. Must be a Graviton (arm64) family. Default t4g.small is enough for early-stage graphs; step up to t4g.medium/large as the graph grows or if the region has patchy t4g.small capacity."
+  description = "EC2 instance type for Neo4j. Must be a Graviton (arm64) type."
   type        = string
   default     = "t4g.small"
 }
@@ -347,13 +263,8 @@ locals {
   manage_certificate = var.acm_certificate_arn == null
   certificate_arn    = local.manage_certificate ? aws_acm_certificate_validation.this[0].certificate_arn : var.acm_certificate_arn
 
-  # Every Ewake image lives in Ewake's account. Constructed here (not via
-  # terraform_remote_state) because a byoc root cannot read Ewake's state.
+  # Every Ewake image lives in Ewake's account.
   ewake_ecr_registry = "${var.ewake_aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
-  # Mirrors terraform/shared/outputs.tf's ecr_repository_urls, minus orchestrator.
-  # SaaS reads that output through terraform_remote_state and picks up new repos for
-  # free; byoc hand-writes the map, so anything added there has to be added here too
-  # or company_stack fails on a missing key.
   ecr_repository_urls = {
     reactive                 = "${local.ewake_ecr_registry}/ewake-reactive"
     "cloudwatch-mcp"         = "${local.ewake_ecr_registry}/ewake-cloudwatch-mcp"
@@ -386,17 +297,7 @@ locals {
 }
 
 variable "public_inbound_base_url" {
-  description = <<-EOT
-    Public https base URL that Slack and Datadog use to reach this deployment, when that is
-    not the dashboard host.
-
-    Only needed with alb_internal = true. A private ALB has no route from the internet, so
-    inbound webhooks need a public entry point in front of it; set this to that entry point's
-    URL and the Slack manifest and Datadog webhook are registered against it. The dashboard
-    keeps answering on the private host either way.
-
-    Leave null when the ALB is public — both roles are then the same name.
-  EOT
+  description = "Public URL that Slack and Datadog use to reach this deployment, when the load balancer is private and you run your own entry point in front of it."
   type        = string
   default     = null
 
@@ -407,24 +308,7 @@ variable "public_inbound_base_url" {
 }
 
 variable "public_inbound_gateway" {
-  description = <<-EOT
-    Put a public API Gateway in front of the private ALB so inbound webhooks can
-    reach this deployment.
-
-    Only meaningful with alb_internal = true; a public ALB already answers these
-    paths itself. Slack and Datadog cannot route to an internal load balancer, so
-    without this their integrations install cleanly and then never deliver.
-
-    Four paths are routed and nothing else: the two Slack callbacks, the Datadog
-    webhook, and the icon Slack fetches to render a message block. The dashboard,
-    the API and SSO stay unreachable from the internet.
-
-    Requests are authenticated by the caller, not by the network: Slack signs
-    every request and the deployment verifies the signature against a five-minute
-    replay window, and the Datadog webhook carries a per-integration token in its
-    path. Set public_inbound_base_url instead if you already run your own entry
-    point and would rather keep it.
-  EOT
+  description = "Create an API Gateway in front of a private load balancer, routing only the paths third parties call."
   type        = bool
   default     = false
 }

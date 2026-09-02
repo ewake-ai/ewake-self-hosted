@@ -96,7 +96,7 @@ data "aws_iam_policy_document" "task" {
     ]
   }
 
-  # Write to this company's <tenant>/<company name>/ prefix in the shared database-dumps bucket (terraform/shared/database_dumps.tf; key scheme owned by scripts/sync-local-db.ts).
+  # Write to this company's <tenant>/<company name>/ prefix in the shared database-dumps bucket.
   statement {
     sid     = "DatabaseDumpsScopedToCompany"
     actions = ["s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"]

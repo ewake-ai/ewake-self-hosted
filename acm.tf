@@ -1,17 +1,7 @@
-# Certificate for var.company_host. Two shapes, chosen by var.acm_certificate_arn:
+# Certificate for var.company_host, issued and DNS-validated here.
 #
-#   null (default) — we issue it here and DNS-validate it in var.hosted_zone_id,
-#     the customer's own Route53 zone. Unlike the SaaS shape (terraform/shared/
-#     acm.tf uses one wildcard cert for every tenant), this is a per-deployment
-#     cert on the customer's own domain. ACM renews it against the same
-#     validation records, which Terraform keeps in place.
-#
-#   set — the customer issued it themselves, because DNS is theirs. Nothing in
-#     this file is created; alb.tf attaches their ARN. Renewal is then their
-#     responsibility, and a lapse is invisible from this stack.
-#
-# Every resource here is gated on local.manage_certificate, so the customer-owned
-# case is an absence of resources rather than a branch.
+# Setting var.acm_certificate_arn creates nothing in this file: alb.tf attaches
+# that ARN instead, and its renewal is yours.
 
 resource "aws_acm_certificate" "this" {
   count = local.manage_certificate ? 1 : 0

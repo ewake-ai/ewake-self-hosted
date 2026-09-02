@@ -1,7 +1,3 @@
-# See vpc.tf for the duplication note. Diff from terraform/tenants/log_clustering.tf:
-# no CloudWatch log subscription filter to the Datadog forwarder — there is no
-# Datadog forwarder in a byoc install.
-
 resource "aws_iam_role" "log_clustering" {
   name = "${var.tenant_name}-log-clustering"
 
@@ -42,7 +38,6 @@ resource "aws_lambda_function" "log_clustering" {
   description   = "drain3 log clustering for the ${var.tenant_name} deployment"
   role          = aws_iam_role.log_clustering.arn
   package_type  = "Image"
-  # Matches terraform/tenants/log_clustering.tf which also pins :latest —
   # CI only publishes this Lambda under :latest, not per release channel.
   image_uri   = "${local.ewake_ecr_registry}/ewake-lambda-log-clustering:latest"
   timeout     = 30

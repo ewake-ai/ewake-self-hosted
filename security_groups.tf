@@ -43,7 +43,7 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "ecs_task" {
-  # Ingress is deliberately NOT inline — see terraform/tenants/security_groups.tf
+  # Ingress is deliberately NOT inline:
   # for the full explanation. company_stack's per-company rules live on its own
   # SG (modules/company_stack/task_discovery.tf), so nothing attaches here but
   # ecs_task_from_alb below.
@@ -91,11 +91,8 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.bootstrap_lambda.id]
   }
 
-  # Diff from terraform/tenants/security_groups.tf, which still carries an
-  # allow-all egress block here. Postgres never dials out, and security groups
-  # are stateful, so replies to the two ingress rules above still flow. Omitting
-  # egress entirely is what removes the default allow-all. Mirror back into
-  # tenants/ when the SaaS roots get the same sweep.
+  # No egress block: Postgres never dials out, and omitting it is what removes
+  # the default allow-all. Security groups are stateful, so replies still flow.
 
   tags = {
     Name = "${var.tenant_name}-rds"

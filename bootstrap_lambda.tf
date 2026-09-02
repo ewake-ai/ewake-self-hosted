@@ -1,6 +1,4 @@
-# See vpc.tf for the duplication note. Diff from terraform/tenants/bootstrap_lambda.tf:
-# image_uri comes from Ewake's ECR (cross-account pull, granted by
-# by Ewake) rather than a local data source.
+# The image is pulled cross-account from Ewake's ECR.
 
 resource "aws_iam_role" "bootstrap_lambda" {
   name = "${var.tenant_name}-rds-bootstrap"
@@ -90,7 +88,6 @@ resource "aws_lambda_function" "bootstrap" {
   function_name = "${var.tenant_name}-rds-bootstrap"
   role          = aws_iam_role.bootstrap_lambda.arn
   package_type  = "Image"
-  # Matches terraform/tenants/bootstrap_lambda.tf which also pins :latest —
   # CI only publishes this Lambda under :latest, not per release channel.
   image_uri   = "${local.ewake_ecr_registry}/ewake-lambda-rds-bootstrap:latest"
   timeout     = 60

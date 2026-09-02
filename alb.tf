@@ -1,7 +1,3 @@
-# See vpc.tf for the duplication note. Diffs from terraform/tenants/alb.tf:
-# certificate_arn points at the customer's own cert (acm.tf) instead of the
-# shared Ewake wildcard, and drop_invalid_header_fields is on below.
-
 resource "aws_lb" "this" {
   name               = "${var.tenant_name}-tenant-alb"
   internal           = var.alb_internal
@@ -13,7 +9,6 @@ resource "aws_lb" "this" {
 
   # Strip headers whose names aren't [-A-Za-z0-9]+ rather than passing them to
   # reactive. Separate from desync_mitigation_mode, which stays on its
-  # "defensive" default. Mirror back into tenants/ when the SaaS roots get the
   # same sweep.
   drop_invalid_header_fields = true
 

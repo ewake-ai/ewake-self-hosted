@@ -143,7 +143,7 @@ resource "aws_ecs_task_definition" "reactive" {
         ] : [],
         local.reactive_container_env,
       local._admin_notify_env)
-      # JWT_SECRET is fleet-wide in saas so sessions survive across tenants; byoc scopes it per-company since there's no shared blob.
+      # Scoped per company, since there's no shared blob.
       secrets = concat([
         # Both resolve in either mode, so they sit outside the byoc split below.
         { name = "DEX_CLIENT_SECRET", valueFrom = local.dex_client_secret_value_from },
@@ -287,7 +287,7 @@ resource "aws_ecs_service" "reactive" {
   # `ResourceNotFoundException: no AWSCURRENT staging label`, then the service
   # hangs in wait_for_steady_state forever. Explicit depends_on closes the race.
   #
-  # db_migrate (byoc-only, empty on SaaS) keeps a fresh install from serving an empty schema.
+  # db_migrate keeps a fresh install from serving an empty schema.
   depends_on = [
     aws_secretsmanager_secret_version.company_neo4j,
     aws_secretsmanager_secret_version.company_db,
@@ -321,10 +321,9 @@ resource "aws_ecs_service" "reactive" {
   tags = { for k, v in local.tags : k => v if k != "Tenant" }
 }
 
-# ignore_changes above is right for SaaS, where CI owns the tag, and wrong for byoc, where
-# terraform is the only deployer — but lifecycle takes no expressions, so it cannot be made
-# conditional. Without this a byoc `apply` registers a revision nobody rolls onto: the
-# migration runs and the old image keeps serving.
+# lifecycle takes no expressions, so ignore_changes above cannot be conditional.
+# Without this an apply registers a revision nobody rolls onto: the migration runs
+# and the old image keeps serving.
 resource "terraform_data" "reactive_deploy" {
   count = local.is_byoc ? 1 : 0
 

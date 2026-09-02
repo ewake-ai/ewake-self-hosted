@@ -202,10 +202,8 @@ resource "aws_volume_attachment" "neo4j_data" {
   instance_id = aws_instance.neo4j.id
 }
 
-# Daily EBS snapshots, 7-day retention — mirrors the RDS `backup_retention_period
-# = 7` in terraform/tenants/rds.tf. The DLM execution role
-# (AWSDataLifecycleManagerDefaultRole) is created account-wide by
-# terraform/shared/dlm.tf, so a fresh account needs no manual bootstrap.
+# Daily EBS snapshots, 7-day retention, matching the RDS backup retention. The
+# DLM execution role is created account-wide by dlm.tf.
 #
 # NB these snapshots are crash-consistent, not clean backups. Community edition
 # has no online backup, so restoring one is equivalent to power-cut recovery via
