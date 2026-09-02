@@ -18,7 +18,7 @@ variable "aws_region" {
 # separation stays so ARN prefixes look the same as SaaS and code that reads them
 # doesn't need a special case.
 variable "tenant_name" {
-  description = "Identifier for this deployment. Lowercase alphanumeric; used in resource names and S3 pointer paths. Typically the customer's short name (e.g. \"acme\"). Capped at 21 chars because it feeds into the ALB name `$${tenant_name}-tenant-alb`, and AWS caps ALB names at 32 — a longer value fails deep into the plan, after RDS's 20-minute create."
+  description = "Identifier for this deployment. Lowercase alphanumeric; used in resource names and S3 pointer paths. Typically your company's short name. Capped at 21 chars because it feeds into the ALB name `$${tenant_name}-tenant-alb`, and AWS caps ALB names at 32 — a longer value fails deep into the plan, after RDS's 20-minute create."
   type        = string
 
   validation {
@@ -73,7 +73,7 @@ variable "company_host" {
 
     Set it to var.root_domain to serve the zone apex instead. That is the byoc
     case where the customer delegates a subdomain of a domain they own (e.g.
-    ewake.qonto.co) and wants to be reached at exactly that name, with no
+    ewake.example.com) and wants to be reached at exactly that name, with no
     further prefix in front of it.
 
     Constrained to root_domain or a single label under it because acm.tf issues
@@ -210,7 +210,7 @@ variable "alb_extra_host_headers" {
 }
 
 variable "ewake_aws_account_id" {
-  description = "AWS account ID that owns the Ewake ECRs. Used to build every image URI (reactive, cloudwatch-mcp, log-clustering-sidecar, the ewake-lambdas bundle, every remaining ewake-lambda-*). Pull is authorized by the aws_ecr_repository_policy Ewake attaches to those repos via terraform/shared/byoc_customers.tf — note the bundle is granted by its own byoc_lambda_bundle resource, so an account cleared for the per-Lambda repos is not automatically cleared for it. Defaults to Ewake's production account — override only if Ewake has told you a different one."
+  description = "AWS account ID that owns the Ewake ECRs. Used to build every image URI (reactive, cloudwatch-mcp, log-clustering-sidecar, the ewake-lambdas bundle, every remaining ewake-lambda-*). Pull is authorized by a repository policy Ewake attaches to those repositories for your account ID. The bundle is granted separately from the per-Lambda repositories, so access to one does not imply access to the other. Defaults to Ewake's production account — override only if Ewake has told you a different one."
   type        = string
   default     = "058264427976"
 
@@ -362,7 +362,7 @@ locals {
   }
 
   # Container-image Lambdas company_stack consumes via var.lambda_image_uris.
-  # Only reactive is left: ewake-ai/back#3124 folded the nine scheduled Lambdas
+  # Only reactive is left: the nine scheduled Lambdas are folded
   # into the single ewake-lambdas bundle below and deleted their per-Lambda
   # ECR repos, so pinning them here would resolve to tags CI no longer moves.
   # rds-bootstrap and log-clustering are NOT here — they are pinned to :latest

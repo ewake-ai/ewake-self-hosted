@@ -1,11 +1,21 @@
 output "dashboard_url" {
-  description = "Public URL of the reactive dashboard. Log in via the OIDC IdP configured in company_stack (see PR #3014 stack)."
+  description = "Public URL of the dashboard. Log in via the OIDC IdP configured in company_stack."
   value       = "https://${local.company_host}"
 }
 
 output "alb_dns_name" {
   description = "DNS name of the tenant ALB. Terraform already creates the A alias for var.company_host when var.hosted_zone_id is set; when it is null this is the value to point the hostname at."
   value       = aws_lb.this.dns_name
+}
+
+output "vpc_id" {
+  description = "ID of the VPC this deployment created. Needed when a transit gateway attachment has to be identified or accepted from the gateway owner's account."
+  value       = aws_vpc.this.id
+}
+
+output "vpc_cidr" {
+  description = "Primary CIDR of the VPC. The network on the other side of a transit gateway needs a route back to this range."
+  value       = aws_vpc.this.cidr_block
 }
 
 output "dns_wiring" {

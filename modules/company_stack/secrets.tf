@@ -9,7 +9,7 @@
 #   ${var.project_name}/${var.tenant_name}/${var.company.name}/integrations/${type}
 # (one secret per integration type, JSON-encoded payload with each token field).
 # Created/updated/deleted by the reactive server at runtime via the OAuth /
-# manual-connect flows in src/reactive/server/routers/api/v1/{auth,integration}.
+# manual-connect flows in the dashboard.
 # The SecretsScopedToCompany statement in iam.tf already covers this prefix
 # (Get/Describe + Create/Update/Delete/Restore + TagResource).
 

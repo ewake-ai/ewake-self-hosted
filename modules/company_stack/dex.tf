@@ -72,7 +72,7 @@ locals {
       # The schema comes from reactive's migration 0005.
       { name = "PGOPTIONS", value = "-c search_path=dex" },
       # RDS terminates TLS; `require` encrypts without pinning a CA, which is what the
-      # app's own pool does (src/core/db passes rejectUnauthorized: false).
+      # the application's own connection pool does.
       { name = "POSTGRES_SSL_MODE", value = "require" },
     ]
     secrets = [

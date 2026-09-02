@@ -25,7 +25,7 @@ company = {
 # "latest") is refused: nothing migrates this database except an apply from this
 # repo, and the image refuses to serve a schema behind it, so a tag that moves
 # under you turns the next task replacement into an outage. Bump this to upgrade.
-app_image_tag = "ewake-v0.153.0"
+app_image_tag = "ewake-v0.164.0"
 
 root_domain    = "ewake.yourcompany.com"
 hosted_zone_id = "Z0123456789ABCDEFGHIJ"

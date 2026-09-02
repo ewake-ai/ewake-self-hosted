@@ -105,8 +105,8 @@ resource "aws_ecs_task_definition" "db_migrate" {
         # Not 1: each chain probes the migrations table on one connection while
         # drizzle opens another for CREATE SCHEMA, so a pool of 1 deadlocks.
         { name = "POSTGRES_POOL_MAX", value = "5" },
-        # This task resolves no URL, but src/core/config requires them at import and
-        # src/core/db pulls config in. Without them it exits before the first chain runs,
+        # This task resolves no URL, but the application requires them at startup in every
+        # runtime. Without them it exits before the first migration chain runs,
         # which fails the gate in front of every deploy.
         { name = "PUBLIC_INBOUND_BASE_URL", value = local.public_inbound_base_url },
         { name = "DASHBOARD_BASE_URL", value = local.company_base_url },
@@ -120,8 +120,8 @@ resource "aws_ecs_task_definition" "db_migrate" {
         { name = "POSTGRES_USER", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:username::" },
         { name = "POSTGRES_PASSWORD", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:password::" },
         { name = "ADMIN_PASSWORD", valueFrom = "${aws_secretsmanager_secret.app[0].arn}:ADMIN_PASSWORD::" },
-        # This task authenticates nothing, but src/core/config requires both at import and
-        # src/core/db pulls config in — the same reason the base URLs are set above.
+        # This task authenticates nothing, but the application requires both at startup —
+        # the same reason the base URLs are set above.
         { name = "JWT_SECRET", valueFrom = "${aws_secretsmanager_secret.app[0].arn}:JWT_SECRET::" },
         { name = "ORCHESTRATOR_SECRET", valueFrom = local.orchestrator_secret_value_from },
       ]
@@ -139,10 +139,9 @@ resource "aws_ecs_task_definition" "db_migrate" {
   tags = local.tags
 }
 
-# Byoc only: SaaS runs this task from .github/workflows/migrate-tenant.yml, and a customer
-# account has no CI to do that. local-exec appears nowhere else in this repo; it is acceptable
-# here because a byoc install already requires an operator with the AWS CLI (see the bootstrap
-# in roots/byoc/README.md).
+# The database migration runs from terraform because this deployment has no CI of its own to
+# run it. local-exec appears nowhere else in this repo; it is acceptable here because the
+# install already requires an operator with the AWS CLI.
 resource "terraform_data" "db_migrate" {
   count = local.is_byoc ? 1 : 0
 

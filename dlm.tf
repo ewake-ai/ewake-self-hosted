@@ -18,7 +18,7 @@ resource "aws_iam_role" "dlm_default" {
     }]
   })
 
-  description = "Default role for AWS Data Lifecycle Manager. Managed by terraform/roots/byoc/dlm.tf."
+  description = "Default role for AWS Data Lifecycle Manager, managed by this deployment."
 
   # Account-global name. If the customer has any unrelated DLM policy in this
   # account (an EBS backup lifecycle set up outside byoc), destroying this role
