@@ -1,6 +1,6 @@
 # See vpc.tf for the duplication note. Diff from terraform/tenants/bootstrap_lambda.tf:
 # image_uri comes from Ewake's ECR (cross-account pull, granted by
-# terraform/shared/byoc_customers.tf) rather than a local data source.
+# by Ewake) rather than a local data source.
 
 resource "aws_iam_role" "bootstrap_lambda" {
   name = "${var.tenant_name}-rds-bootstrap"

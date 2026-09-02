@@ -18,7 +18,7 @@ variable "aws_region" {
 # separation stays so ARN prefixes look the same as SaaS and code that reads them
 # doesn't need a special case.
 variable "tenant_name" {
-  description = "Identifier for this deployment. Lowercase alphanumeric; used in resource names and S3 pointer paths. Typically the customer's short name (e.g. \"acme\"). Capped at 21 chars because it feeds into the ALB name `$${tenant_name}-tenant-alb`, and AWS caps ALB names at 32 — a longer value fails deep into the plan, after RDS's 20-minute create."
+  description = "Identifier for this deployment. Lowercase alphanumeric; used in resource names and S3 pointer paths. Typically your company's short name. Capped at 21 chars because it feeds into the ALB name `$${tenant_name}-tenant-alb`, and AWS caps ALB names at 32 — a longer value fails deep into the plan, after RDS's 20-minute create."
   type        = string
 
   validation {
@@ -210,7 +210,7 @@ variable "alb_extra_host_headers" {
 }
 
 variable "ewake_aws_account_id" {
-  description = "AWS account ID that owns the Ewake ECRs. Used to build every image URI (reactive, cloudwatch-mcp, log-clustering-sidecar, the ewake-lambdas bundle, every remaining ewake-lambda-*). Pull is authorized by the aws_ecr_repository_policy Ewake attaches to those repos via terraform/shared/byoc_customers.tf — note the bundle is granted by its own byoc_lambda_bundle resource, so an account cleared for the per-Lambda repos is not automatically cleared for it. Defaults to Ewake's production account — override only if Ewake has told you a different one."
+  description = "AWS account ID that owns the Ewake ECRs. Used to build every image URI (reactive, cloudwatch-mcp, log-clustering-sidecar, the ewake-lambdas bundle, every remaining ewake-lambda-*). Pull is authorized by a repository policy Ewake attaches to those repositories for your account ID. The bundle is granted separately from the per-Lambda repositories, so access to one does not imply access to the other. Defaults to Ewake's production account — override only if Ewake has told you a different one."
   type        = string
   default     = "058264427976"
 

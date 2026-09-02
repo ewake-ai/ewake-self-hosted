@@ -8,6 +8,16 @@ output "alb_dns_name" {
   value       = aws_lb.this.dns_name
 }
 
+output "vpc_id" {
+  description = "ID of the VPC this deployment created. Needed when a transit gateway attachment has to be identified or accepted from the gateway owner's account."
+  value       = aws_vpc.this.id
+}
+
+output "vpc_cidr" {
+  description = "Primary CIDR of the VPC. The network on the other side of a transit gateway needs a route back to this range."
+  value       = aws_vpc.this.cidr_block
+}
+
 output "dns_wiring" {
   description = <<-EOT
     Everything the edge depends on, in one place, whether or not Terraform owns

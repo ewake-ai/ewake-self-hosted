@@ -1,62 +1,74 @@
 # Ewake — self-hosted deployment
 
-Deploy Ewake into **your own AWS account**. Everything runs on your
-infrastructure — your VPC, your RDS, your ECS cluster. Nothing phones home
-at runtime. The only dependency on Ewake is container images and frontend
-assets, which your account pulls cross-account from Ewake's ECR and S3.
-Ewake grants that access to your account ID before your first apply.
+Terraform to deploy Ewake into your own AWS account: your VPC, your RDS, your
+ECS cluster, your Neo4j volume.
+
+The deployment pulls container images and frontend assets from Ewake's ECR and
+S3 in another account. Ewake grants your account ID access to those before your
+first apply. Nothing else leaves your account at runtime: no logs, metrics,
+traces or usage data, and no shared infrastructure between deployments.
+
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Configuration](#configuration)
+- [Private deployments](#private-deployments)
+- [First apply](#first-apply)
+- [Post-install](#post-install)
+- [Updating](#updating)
+- [Tearing down](#tearing-down)
 
 ## Prerequisites
 
-Six things must be ready before your first apply. Items 2, 3 and 5 usually need
-another team, so request them first.
+Six items. Numbers 2 to 5 usually need another team, so request them first.
 
 | # | What you need | Usually owned by |
 | - | ------------- | ---------------- |
 | 1 | Terraform >= 1.10 and the AWS CLI | you |
-| 2 | A dedicated AWS account in `eu-west-3` | your cloud team |
+| 2 | An AWS account in `eu-west-3` | your cloud team |
 | 3 | A domain delegated to a Route53 zone in that account | your DNS team |
 | 4 | An OIDC identity provider | your identity team |
 | 5 | Bedrock access to five models | your AWS account owner |
-| 6 | Network access to the deployment, if it is private | your network team |
+| 6 | Network access, if the deployment is private | your network team |
 
 ### 1. Terraform and the AWS CLI
 
-Terraform 1.10 or newer, and the AWS CLI. Both must authenticate as the same
+Terraform 1.10 or newer, plus the AWS CLI. Both must authenticate as the same
 principal. Terraform locks state with an S3 `.tflock` object, which older
 versions reject at `init`.
 
-### 2. A dedicated AWS account in `eu-west-3`
+### 2. An AWS account in `eu-west-3`
 
-`eu-west-3` (Paris) is the only supported region today. Ewake publishes its
-container images there, so any other region fails when pulling images.
-Terraform rejects an unsupported region at `plan`. Tell us if you need another
-region — adding one is quick on our side.
+`eu-west-3` (Paris) is the only supported region today, because Ewake publishes
+its images there. Any other region fails when pulling images, and Terraform
+rejects an unsupported region at `plan`. Contact Ewake if you need another
+region.
 
-Use a standalone account. This keeps the deployment's VPC, IAM roles and
+Use a dedicated account. This keeps the deployment's VPC, IAM roles and
 security groups separate from your other workloads.
 
 ### 3. A domain delegated to Route53
 
-A domain or subdomain, for example `ewake.yourcompany.com`, delegated to a
-**Route53 hosted zone in the same AWS account**. The install creates an ACM
+A domain or subdomain — for example `ewake.example.com` — delegated to a
+Route53 hosted zone **in the same AWS account**. The install creates an ACM
 certificate and validates it against that zone.
 
-If you cannot delegate a public zone, you can bring your own certificate
-instead. See [If you can't delegate a public zone](#if-you-cant-delegate-a-public-zone).
+If you cannot delegate a public zone, bring your own certificate instead. See
+[If you cannot delegate a public zone](#if-you-cannot-delegate-a-public-zone).
 
 ### 4. An OIDC identity provider
 
 Okta, Entra ID, Google Workspace, Auth0, or any spec-compliant provider. You
-register Ewake as an application in your IdP. See [Configure SSO](#2-configure-sso).
+register Ewake as an application there. See [Configure SSO](#2-configure-sso).
 
 You can also start without one. Ewake then serves a username and password form,
-and Terraform generates an admin password for you. Add SSO later.
+and Terraform generates an admin password into Secrets Manager under
+`ewake/<tenant_name>/<company.name>/app`, key `ADMIN_PASSWORD`. Read it from
+Secrets Manager. Adding a connector later switches login over.
 
 ### 5. Bedrock access to five models
 
-Ewake calls five models. Your account needs a Marketplace agreement for **all
-five**:
+Your account needs a Marketplace agreement for **all five** of these models in
+`eu-west-3`:
 
 ```
 eu.anthropic.claude-opus-4-5-20251101-v1:0
@@ -66,31 +78,27 @@ eu.anthropic.claude-haiku-4-5-20251001-v1:0
 cohere.embed-multilingual-v3
 ```
 
-The `eu.` prefix means a cross-region inference profile. The AWS Console lists
-each one under its underlying model name.
+The `eu.` prefix is a cross-region inference profile. The AWS Console lists each
+one under its underlying model name.
 
-> **Enable all five. Partial access is worse than none.**
-> The main agent runs on Opus, and every sub-agent runs on Haiku with Sonnet 4.5
-> behind it. If you enable only Opus, Ewake still answers you fluently, but it
-> has investigated nothing. This looks like a product bug, not a missing
-> entitlement. The real cause is buried in an AWS Marketplace error naming
-> `aws-marketplace:ViewSubscriptions`.
+Enable all five. If some are missing, Ewake still replies but cannot complete
+its work, and the underlying error is an AWS Marketplace one rather than an
+obvious failure.
 
 **Check whether an agreement is missing.** Use the base model ID, not the `eu.`
 profile ID:
 
-```bash
+```sh
 aws bedrock get-foundation-model-availability --region eu-west-3 \
   --model-id anthropic.claude-haiku-4-5-20251001-v1:0
 ```
 
-`agreementAvailability: NOT_AVAILABLE` is the answer that matters. Ignore
-`authorizationStatus`, `entitlementAvailability` and `regionAvailability` here.
+`agreementAvailability: NOT_AVAILABLE` is the field that matters. Ignore
+`authorizationStatus`, `entitlementAvailability` and `regionAvailability`.
 
-**Accept an agreement.** The AWS docs describe a console flow, but the CLI is
-reliable. Run two commands per model, again with the base model ID:
+**Accept an agreement.** Two commands per model, again with the base model ID:
 
-```bash
+```sh
 MODEL=anthropic.claude-haiku-4-5-20251001-v1:0
 
 token=$(aws bedrock list-foundation-model-agreement-offers --region eu-west-3 \
@@ -100,18 +108,17 @@ aws bedrock create-foundation-model-agreement --region eu-west-3 \
   --model-id "$MODEL" --offer-token "$token"
 ```
 
-> `create-foundation-model-agreement` accepts the vendor's licence terms on
-> behalf of your account. Your account owner should run it, not Ewake.
+`create-foundation-model-agreement` accepts the vendor's licence terms for your
+account, so your account owner should run it.
 
-If the error names IAM permissions, do not audit your IAM role. Bedrock returns
-`aws-marketplace:ViewSubscriptions` whenever the agreement is missing, whatever
-permissions the caller holds. We have seen this on an account with
-`AdministratorAccess` and no SCP.
+If the error names `aws-marketplace:ViewSubscriptions` or
+`aws-marketplace:Subscribe`, the agreement is missing. Bedrock returns that
+message whatever IAM permissions the caller holds, so check the agreement
+before auditing the role.
 
-**Verify each model by calling it.** Do not verify by reading the console, where
-these appear under their underlying names and look enabled:
+**Verify by calling each model**, rather than by reading the console:
 
-```bash
+```sh
 aws bedrock-runtime invoke-model --region eu-west-3 \
   --model-id eu.anthropic.claude-haiku-4-5-20251001-v1:0 \
   --content-type application/json \
@@ -121,17 +128,16 @@ aws bedrock-runtime invoke-model --region eu-west-3 \
 
 ### 6. Network access, if the deployment is private
 
-Skip this if your ALB will be internet-facing.
+Skip this if the load balancer will be internet-facing.
 
-If you set `alb_internal = true`, your users reach the dashboard over your own
-network. See [Reaching a private deployment](#reaching-a-private-deployment)
-for what your network team must provide.
+If you set `alb_internal = true`, users reach the dashboard over your own
+network. See [Private deployments](#private-deployments).
+
 ## Setup
 
 ### State bucket
 
-Terraform needs a versioned S3 bucket for state before it can `init`.
-Create it once, in the region you'll deploy to:
+Terraform needs a versioned S3 bucket for state before `init`. Create it once:
 
 ```sh
 export AWS_REGION=eu-west-3
@@ -141,137 +147,95 @@ aws s3api put-bucket-versioning \
   --versioning-configuration Status=Enabled
 ```
 
-The Terraform user needs `s3:GetObject`, `s3:PutObject` and
+The Terraform principal needs `s3:GetObject`, `s3:PutObject` and
 `s3:DeleteObject` on this bucket.
 
-> **Security note:** Terraform state contains sensitive values, including
-> SSO connector client secrets (written into the ECS task definition at
-> plan time). Enable server-side encryption on the bucket (SSE-S3 or
-> SSE-KMS), restrict access to the Terraform operator, and treat the
-> state file as holding credentials.
+> **Terraform state holds credentials.** It contains SSO connector client
+> secrets, which are read at plan time to build the container configuration.
+> Enable server-side encryption (SSE-S3 or SSE-KMS), restrict access to the
+> Terraform operator, and treat the state file as a secret.
 
 ### Route53 hosted zone
 
-Create a Route53 hosted zone for your domain in this AWS account, then
-delegate to it from your DNS registrar (or parent Route53 zone):
+Create the hosted zone in this AWS account, then delegate to it from your
+registrar or parent zone:
 
 ```sh
 ZONE_ID=$(aws route53 create-hosted-zone \
-  --name "ewake.yourcompany.com" \
+  --name "ewake.example.com" \
   --caller-reference "ewake-$(date +%s)" \
   --query 'HostedZone.Id' --output text | sed 's|/hostedzone/||')
 
 aws route53 get-hosted-zone --id "$ZONE_ID" \
   --query 'DelegationSet.NameServers' --output text
-# → add those 4 NS records at your registrar / parent zone
 ```
 
-Confirm delegation propagates before running apply — the ACM certificate
-validation writes DNS records into this zone and blocks until they resolve
-(up to 45 minutes):
+Add those four NS records at your registrar or parent zone. Confirm delegation
+resolves before you apply — certificate validation writes records into this zone
+and waits for them, for up to 45 minutes:
 
 ```sh
-dig +short NS ewake.yourcompany.com @8.8.8.8
+dig +short NS ewake.example.com @8.8.8.8
 ```
 
-### If you can't delegate a public zone
+### If you cannot delegate a public zone
 
-The section above assumes you can delegate a zone to this AWS account and
-that it resolves publicly. Not every organisation can. A common shape is a
-hostname that lives in a **private** hosted zone, or in a parent zone owned
-by a different team in a different account.
+ACM validates domain control over **public** DNS. It cannot see a private hosted
+zone, or a zone whose parent has not delegated to it. Pointing `hosted_zone_id`
+at either does not fail quickly: validation waits for the full timeout, and the
+dashboard is unavailable until it completes.
 
-ACM validates domain control over **public** DNS. It cannot see a private
-hosted zone, and it cannot see a zone whose parent has not delegated to it.
-Pointing `hosted_zone_id` at either one does not fail fast: certificate
-validation blocks for the full timeout and takes the dashboard with it,
-because the whole stack sits behind the HTTPS listener.
-
-If that is your situation, take DNS out of Terraform's hands entirely:
+In that case, take DNS out of Terraform:
 
 ```hcl
 hosted_zone_id      = null
 acm_certificate_arn = "arn:aws:acm:eu-west-3:...:certificate/..."
-company_host        = "ewake.yourcompany.com"
+company_host        = "ewake.example.com"
 ```
 
-Terraform then creates no zone records and issues no certificate. You own
-two things, and **nothing in this stack will tell you if either lapses**:
+Terraform then creates no DNS records and issues no certificate. You own two
+things, and the deployment will not warn you if either lapses:
 
-1. **The A record.** Point `company_host` at the `alb_dns_name` output,
-   wherever your resolution actually happens — a private hosted zone, an
-   internal resolver, your parent zone. With `alb_internal = true` the ALB
-   has private addresses, so a private zone is the natural home for it.
-2. **Certificate renewal.** Whatever DNS record proved control when the
-   certificate was issued has to stay in place: ACM re-reads it to renew,
-   roughly eleven months later. Deleting it breaks renewal silently.
+1. **The A record.** Point `company_host` at the `alb_dns_name` output, wherever
+   your resolution happens. With `alb_internal = true` the load balancer has
+   private addresses, so a private hosted zone is the usual place.
+2. **Certificate renewal.** The DNS record that proved control must stay in
+   place. ACM re-reads it to renew, about eleven months later. Deleting it
+   breaks renewal with no error at apply time.
 
-To issue that certificate, request it in the same region as the deployment
-and publish the validation record wherever your domain resolves publicly —
-this can be a flat CNAME in the parent zone; the name itself never has to be
-publicly resolvable, only the validation record:
+To issue the certificate, request it in the same region and publish the
+validation record wherever your domain resolves publicly. The hostname itself
+never needs to be publicly resolvable — only the validation record:
 
 ```sh
 aws acm request-certificate --region eu-west-3 \
-  --domain-name ewake.yourcompany.com --validation-method DNS \
+  --domain-name ewake.example.com --validation-method DNS \
   --query CertificateArn --output text
-# then read the record to publish:
+
 aws acm describe-certificate --region eu-west-3 --certificate-arn "$ARN" \
   --query 'Certificate.DomainValidationOptions[].ResourceRecord'
 ```
 
-After apply, `terraform output dns_wiring` prints every value the edge
-depends on and which half is yours; `terraform output manual_dns_steps`
-lists what is still outstanding. Capture that output somewhere durable — it
-is the record of what the working configuration was.
+After apply, `terraform output dns_wiring` prints every value the edge depends
+on and which half is yours. `terraform output manual_dns_steps` lists what is
+still outstanding. Keep that output.
 
-### Changing the hostname of a running deployment
+### DLM role, if your account already has one
 
-Do it in two applies, never one. The first is additive and safe; the second
-removes the old name once you have confirmed the new one works.
-
-**Apply 1** — serve both names. Leave `root_domain`, `hosted_zone_id` and
-`company_host` exactly as they are, and add:
-
-```hcl
-extra_certificate_arns = ["arn:...:certificate/<cert for the new name>"]
-alb_extra_host_headers = ["new.yourcompany.com"]
-```
-
-`extra_certificate_arns` makes the TLS handshake succeed on the new name;
-`alb_extra_host_headers` makes the request actually route. They are separate
-settings because they are separate failure modes — a certificate with no
-host header gives you a clean handshake followed by the listener's `404 no
-route`, which looks like a working migration until someone tries it.
-
-**Apply 2** — once the new name loads, move `company_host`, `root_domain`
-and `hosted_zone_id`/`acm_certificate_arn` over and empty both extra lists.
-This one destroys the old certificate and A record, and replaces the reactive
-task definition, since the dashboard URL is baked into its environment.
-
-Don't collapse the two. If Terraform manages the old certificate, an apply
-that both drops it and still needs it on the listener fails on
-`ResourceInUseException`.
-
-### DLM role (if your account already has one)
-
-If your account has ever used AWS Data Lifecycle Manager — even an
-unrelated EBS lifecycle policy — it already has the
-`AWSDataLifecycleManagerDefaultRole` that this deployment creates, and
-the first apply will fail with `EntityAlreadyExists`. Import it first:
+If this account has ever used AWS Data Lifecycle Manager, it already has the
+`AWSDataLifecycleManagerDefaultRole` that this deployment creates, and the first
+apply fails with `EntityAlreadyExists`. Import it first:
 
 ```sh
 aws iam get-role --role-name AWSDataLifecycleManagerDefaultRole \
   && terraform import aws_iam_role.dlm_default AWSDataLifecycleManagerDefaultRole
 ```
 
-A `NoSuchEntity` response means the role doesn't exist yet — nothing to
-import, proceed to the next step.
+A `NoSuchEntity` response means there is nothing to import. Continue.
 
 ## Configuration
 
-Copy `terraform.tfvars.example` to `terraform.tfvars` and fill in your
-values:
+Copy `terraform.tfvars.example` to `terraform.tfvars` and fill it in:
 
 ```hcl
 aws_region  = "eu-west-3"
@@ -285,193 +249,165 @@ company = {
   sso_connectors = ["google"]
 }
 
-root_domain    = "ewake.yourcompany.com"
+app_image_tag  = "ewake-v0.164.0"
+root_domain    = "ewake.example.com"
 hosted_zone_id = "Z0123456789ABCDEFGHIJ"
 azs            = ["eu-west-3a", "eu-west-3b"]
 ```
 
-**Naming rules:**
-- `tenant_name`: lowercase letters and digits only (no hyphens), starts
-  with a letter, max 21 characters.
-- `company.name`: same rules, max 33 characters.
-- Both typically use your company's short name (e.g. `acme`, `qonto`).
+**Naming rules**
 
-**Optional overrides** (defaults shown):
+- `tenant_name`: lowercase letters and digits only, starts with a letter,
+  maximum 21 characters.
+- `company.name`: same rules, maximum 33 characters.
+- Both are usually your company's short name.
+
+**`app_image_tag` is required and must name a version.** A moving tag such as
+`stable` or `latest` is rejected. Only an apply from this repository migrates the
+database, and the application refuses to serve a schema older than its own, so a
+tag that moves underneath you turns the next task replacement into an outage. See
+[Updating](#updating).
+
+**Optional overrides**
 
 | Variable | Default | Notes |
-|---|---|---|
-| `vpc_cidr` | `"10.10.0.0/16"` | Change if it collides with peering |
-| `rds_instance_class` | `"db.t4g.small"` | Scale up for larger teams |
-| `rds_multi_az` | `true` | `false` for cost savings in non-prod |
-| `neo4j_instance_type` | `"t4g.small"` | Must be a Graviton (arm64) type |
+| --- | --- | --- |
+| `vpc_cidr` | `10.10.0.0/16` | Change if it overlaps a network you peer with |
+| `rds_instance_class` | `db.t4g.small` | Increase for larger teams |
+| `rds_multi_az` | `true` | `false` costs less in non-production |
+| `neo4j_instance_type` | `t4g.small` | Must be a Graviton (arm64) type |
 
-> **Capacity note:** `db.t4g.small` and `t4g.small` can be
-> capacity-constrained in some AZs. If the first apply stalls on RDS or
-> Neo4j creation with `insufficient-capacity`, try `db.t4g.medium` /
-> `t4g.medium`, or pick different AZs.
+Choose `vpc_cidr` carefully. Changing it later requires a rebuild, not an
+apply: AWS cannot remove a VPC's primary CIDR, and both RDS and the Neo4j
+volume are protected against deletion.
 
-### Private deployments (no public ingress)
+> `db.t4g.small` and `t4g.small` are sometimes capacity-constrained. If the
+> first apply stalls on RDS or Neo4j with `insufficient-capacity`, use
+> `db.t4g.medium` / `t4g.medium`, or different availability zones.
 
-By default the ALB is internet-facing and accepts 443/80 from anywhere. To keep
-the deployment private — an isolated account, or a security review that will not
-accept a public dashboard — set both:
+## Private deployments
+
+By default the load balancer is internet-facing and accepts 443 and 80 from
+anywhere. To keep the deployment private, set both:
 
 ```hcl
 alb_internal      = true
 alb_ingress_cidrs = ["10.10.0.0/16"]   # your vpc_cidr, or a VPN range
 ```
 
-Set them **together**. `alb_internal` moves the load balancer to the private
-subnets and drops its public IPs; `alb_ingress_cidrs` is what actually refuses a
-packet. Either alone leaves a gap.
+Set them together. `alb_internal` moves the load balancer to the private subnets
+and removes its public addresses. `alb_ingress_cidrs` is what actually refuses a
+packet. Either one alone leaves a gap.
 
-**Decide `alb_internal` before your first apply.** A load balancer's scheme is
-immutable in AWS, and this one cannot be changed in place afterwards — not
-disruptively, but *not at all*. Terraform destroys the listeners, then fails to
-create the replacement because the old load balancer still holds the name:
+> **Choose `alb_internal` before your first apply. You cannot change it later.**
+>
+> A load balancer's scheme is immutable in AWS. If you change `alb_internal` on
+> a running deployment, Terraform deletes the listeners, then fails to create
+> the replacement because the old load balancer still holds the name:
+>
+> ```
+> Error: ELBv2 Load Balancer (<tenant>-tenant-alb) already exists
+> ```
+>
+> The deployment is then down, mid-apply, with no listeners and no new load
+> balancer. To recover, delete the load balancer yourself and apply again:
+>
+> ```sh
+> aws elbv2 delete-load-balancer --load-balancer-arn \
+>   $(aws elbv2 describe-load-balancers --names <tenant>-tenant-alb \
+>       --query 'LoadBalancers[0].LoadBalancerArn' --output text)
+> terraform apply
+> ```
+>
+> Do not use `terraform destroy -target=aws_lb.this`. It cascades into the whole
+> company module, including the Neo4j volume.
+>
+> The replacement has a new DNS name and hosted-zone ID. If you own the DNS
+> record, repoint it using `terraform output dns_wiring`.
 
+`alb_ingress_cidrs` has none of that cost. It is security-group rules, editable
+at any time with no replacement and no downtime. If you are unsure, start
+internet-facing and narrow `alb_ingress_cidrs`.
+
+### Connecting your network through a transit gateway
+
+Use this when the deployment is private and your users reach it from your
+corporate network or VPN.
+
+```hcl
+transit_gateway_id     = "tgw-0123456789abcdef0"
+transit_gateway_routes = ["10.38.0.0/23"]   # CIDRs reached through the gateway
+alb_ingress_cidrs      = ["10.10.0.0/16", "10.38.0.0/23"]
 ```
-Error: ELBv2 Load Balancer (<tenant>-tenant-alb) already exists
-```
 
-That leaves the deployment **down, mid-apply**: no listeners, and no new load
-balancer. The name collides because the replacement is created before the old one
-is removed, which the ECS service and target group require of everything they
-depend on.
+This deployment creates the VPC attachment and adds one route per CIDR to every
+private route table. That is one half of the path. The other half belongs to
+whoever owns the transit gateway.
 
-Recovering means deleting the load balancer yourself, between two applies:
+**What your network team must provide**
+
+| # | Item | Why |
+| - | ---- | --- |
+| 1 | The transit gateway shared with this account, through AWS RAM | Terraform cannot attach to a gateway the account cannot see |
+| 2 | Acceptance of the VPC attachment this deployment creates | Cross-account attachments are pending until the owner accepts, unless auto-accept is on |
+| 3 | Association and propagation for the attachment in the gateway's route table | The owner's side; this deployment does not manage it |
+| 4 | A route back to `vpc_cidr` from your network | Without it, requests arrive and replies never return |
+| 5 | The client CIDRs, for `transit_gateway_routes` and `alb_ingress_cidrs` | Outbound routes and the security group both need them |
+| 6 | DNS resolution for `company_host` to the load balancer's private addresses | A private load balancer is not in public DNS |
+
+Confirm the account can see the gateway before you apply:
 
 ```sh
-aws elbv2 delete-load-balancer --load-balancer-arn \
-  $(aws elbv2 describe-load-balancers --names <tenant>-tenant-alb \
-      --query 'LoadBalancers[0].LoadBalancerArn' --output text)
-terraform apply
+aws ec2 describe-transit-gateways --region eu-west-3 \
+  --query 'TransitGateways[].[TransitGatewayId,State,OwnerId]' --output table
 ```
 
-Do not reach for `terraform destroy -target=aws_lb.this` instead — it cascades into
-the whole company module, including the Neo4j volume, and stops on its
-`prevent_destroy` guard having already planned the rest.
+If the gateway has default route-table association and propagation enabled, AWS
+does items 3 and 4 automatically when the attachment is accepted.
 
-The replacement comes back with a **new DNS name and a new hosted-zone ID**. If
-Terraform owns your record it updates it for you; if you own it
-(`hosted_zone_id = null`) your hostname points at a load balancer that no longer
-exists until you repoint it by hand, and `terraform output dns_wiring` is where the
-new target comes from.
+Check the attachment state after applying:
 
-So treat the scheme as part of the deployment's shape, chosen once. If you expect
-to need both at different times, start public and narrow `alb_ingress_cidrs`
-instead — that list is editable in place, with no replacement and no outage.
+```sh
+aws ec2 describe-transit-gateway-vpc-attachments --region eu-west-3 \
+  --filters "Name=vpc-id,Values=$(terraform output -raw vpc_id)" \
+  --query 'TransitGatewayVpcAttachments[].[TransitGatewayAttachmentId,State]' --output text
+```
 
-#### Inbound webhooks on a private deployment
+`pendingAcceptance` means item 2 is outstanding. `available` means the
+attachment is up, which does not by itself prove items 3 and 4 — test with a
+request from a client network.
 
-A private ALB has no route from the internet, so Slack and Datadog cannot deliver
-to it. The dashboard is unaffected — your users reach it over your own network —
-but any integration that calls *in* needs a public entry point in front.
+### Inbound webhooks on a private deployment
 
-If you already run one (an API gateway, a reverse proxy, a CDN) point it at the
-ALB and name it here:
+A private load balancer has no route from the internet, so Slack and Datadog
+cannot deliver to it. The dashboard is unaffected, because your users reach it
+over your own network. Only integrations that call in need a public entry point.
+
+If you already run one — an API gateway, a reverse proxy, a CDN — point it at
+the load balancer and name it:
 
 ```hcl
 public_inbound_base_url = "https://ewake-inbound.example.com"
 ```
 
-The Slack manifest and the Datadog webhook are then registered against that URL
-instead of the dashboard host, which stays private. Leave it unset when the ALB is
-public — both roles are the same name then, and this is the only difference
-between them.
+The Slack manifest and the Datadog webhook are then registered against that URL,
+and the dashboard host stays private. Leave it unset when the load balancer is
+internet-facing.
 
-`alb_ingress_cidrs` has none of that cost — it is security-group rules, changeable
-in place at any time. Tightening or widening who can reach an existing deployment
-is always cheap; changing whether it is public is not.
+If you do not run one, set `public_inbound_gateway = true`. The deployment then
+creates an API Gateway that routes only the paths a third party calls. Anything
+else returns 404 at the gateway and never reaches the VPC:
 
-##### Which paths the gateway routes
-
-When `public_inbound_gateway` is on, only the paths a third party actually calls
-are routed; anything else is a 404 at the gateway and never reaches the VPC. The
-dashboard, the API and SSO are deliberately not among them — those you reach over
-your own network.
-
-| path | called by |
+| Path | Called by |
 | ---- | --------- |
 | `POST /api/v1/slack/events` | Slack |
-| `POST /api/v1/slack/interactive` | Slack (buttons and modals) |
+| `POST /api/v1/slack/interactive` | Slack buttons and modals |
 | `POST /api/webhook/datadog/{token}` | Datadog monitors |
 | `GET /android-chrome-512x512.png` | Slack, rendering a message block |
-| `POST /api/v1/events/deployment` | your CI — see below |
+| `POST /api/v1/events/deployment` | your CI |
 
-#### Sending deployment events
-
-Ewake correlates incidents against what you shipped. Your CI posts one event per
-deploy; nothing polls your repositories, so without this the agent investigates
-without knowing a release just went out.
-
-Mint an API key in the dashboard under **API Keys**, then POST as that key. The
-key is shown once:
-
-```bash
-curl -X POST https://<your-ewake-host>/api/v1/events/deployment \
-  -H "Authorization: Bearer $EWAKE_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "timestamp": "2026-07-30T12:00:00Z",
-    "repository": "my-org/my-service",
-    "repositoryUrl": "https://github.com/my-org/my-service",
-    "artifactName": "my-service",
-    "commitSha": "a1b2c3d4e5f6",
-    "version": "v1.4.2",
-    "url": "https://github.com/my-org/my-service/actions/runs/123",
-    "message": "Bump connection pool size",
-    "source": "github-actions"
-  }'
-```
-
-`timestamp`, `repository`, `repositoryUrl`, `artifactName` and `commitSha` are
-required; `version`, `url`, `message`, `labels` and `source` are optional. A
-malformed body returns `400` naming the offending field. A valid one returns
-`202` immediately — ingestion and release watch run after the response.
-
-On a **private** deployment, `<your-ewake-host>` is your `public_inbound_base_url`
-if your CI runs outside the VPC, or the dashboard host if it runs inside. The
-gateway routes this path for exactly that reason.
-
-A private ALB does not require a private DNS story. If you *can* delegate a public
-zone, keep `hosted_zone_id` set: ACM validates by reading a DNS record, never by
-connecting to the load balancer, so a private ALB and a public zone are not in
-conflict, and the dashboard's record simply resolves to private addresses.
-
-If you cannot, set `hosted_zone_id = null` and supply your own certificate — see
-[If you can't delegate a public zone](#if-you-cant-delegate-a-public-zone). That
-combination (internal ALB, customer-owned record in a private zone, customer-issued
-certificate) is a supported shape and is what at least one production deployment
-runs. Either way you need a certificate before the apply can create the HTTPS
-listener the rest of the stack sits behind.
-
-#### Reaching a private dashboard
-
-The VPC already carries `ssm`, `ssmmessages` and `ec2messages` interface
-endpoints, and the Neo4j instance runs in a private subnet with
-`AmazonSSMManagedInstanceCore`. That is enough to port-forward without a VPN,
-a bastion or any inbound rule:
-
-```sh
-INSTANCE=$(aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=*neo4j*" "Name=instance-state-name,Values=running" \
-  --query 'Reservations[0].Instances[0].InstanceId' --output text)
-
-aws ssm start-session --target "$INSTANCE" \
-  --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters "host=<company.name>.<root_domain>,portNumber=443,localPortNumber=8443"
-```
-
-Then map the hostname to your loopback so the certificate still matches:
-
-```
-127.0.0.1  <company.name>.<root_domain>
-```
-
-in `/etc/hosts`, and open `https://<company.name>.<root_domain>:8443`. Users need
-`ssm:StartSession` on that instance and nothing else — no inbound access, no
-credentials on the box.
+The dashboard, the API and SSO are deliberately not routed. Reach those over
+your own network.
 
 ## First apply
 
@@ -485,13 +421,11 @@ terraform plan
 terraform apply
 ```
 
-The first apply takes about 15–20 minutes. RDS and Neo4j take most of that time.
+The first apply takes about 15 to 20 minutes. RDS and Neo4j take most of it.
 
-### Expect the first apply to fail once
+### The first apply fails once. Run it again.
 
-**This is normal on a new install. Run `terraform apply` again.**
-
-The apply stops on the `db-migrate` task with an error like this:
+On a new install, the apply stops on the `db-migrate` task with an error like:
 
 ```
 Error: local-exec provisioner error
@@ -499,46 +433,45 @@ db-migrate exited ... unable to assume the role ...
 verify that the role being passed has the proper trust relationship
 ```
 
-The message points at a trust policy, but the trust policy is correct. The real
-cause is timing: Terraform creates the IAM role and then runs the database
-migration a few seconds later, before IAM has finished propagating the role
-across AWS.
+The trust policy the message names is correct. Terraform creates the IAM role
+and runs the database migration a few seconds later, before IAM has finished
+propagating the role.
 
-Nothing is broken and nothing needs to be changed. Run `terraform apply` again
-and it continues from where it stopped. We have seen this on every new install.
+Run `terraform apply` again. It continues from where it stopped, and nothing
+needs to be changed. This happens on every new install.
 
-If the same error appears on the **third** apply, it is no longer this race.
-Check that the `db-migrate` task role exists and that its trust policy allows
+If the same error appears on a third apply, it is not this. Check that the
+`db-migrate` task role exists and that its trust policy allows
 `ecs-tasks.amazonaws.com`.
 
-### When the apply finishes
+### After the apply completes
 
 ```sh
 terraform output dashboard_url
 ```
 
-That is your Ewake dashboard URL. Continue with [Post-install](#post-install).
+That is your dashboard URL. Continue with [Post-install](#post-install).
+
 ## Post-install
 
-### 1. Verify the dashboard loads
+### 1. Check the dashboard loads
 
-Open the URL from `terraform output dashboard_url` — the login screen
-should appear. If the page doesn't load, check that DNS delegation
-propagated (the ACM cert validation can silently time out).
+Open `terraform output dashboard_url`. The login screen should appear. If the
+page does not load, check that DNS delegation has propagated — certificate
+validation can time out silently.
 
 ### 2. Configure SSO
 
-Login requires at least one SSO connector. The setup is a three-step
-process — two applies with a secret write in between.
+Login needs at least one SSO connector. This is two applies with a secret write
+in between.
 
-**Step 1.** List the connector ID in `sso_connectors` in your tfvars
-and apply. This creates an empty Secrets Manager secret that Terraform
-owns:
+**Step 1 — create the secret.** List the connector ID in `sso_connectors` and
+apply:
 
 ```hcl
 company = {
-  ...
-  sso_connectors = ["google"]   # or "okta", "github", etc.
+  # ...
+  sso_connectors = ["google"]   # or "okta", "github", and so on
 }
 ```
 
@@ -546,20 +479,19 @@ company = {
 terraform apply
 ```
 
-> After this apply the dashboard is up but **nobody can log in**. The
-> secret holds a placeholder that Dex rejects on purpose. The sidecar
-> dies at startup, but it is non-essential so the service reports
-> healthy — this is expected, not a fault. Proceed to step 2.
+After this apply the dashboard is up but nobody can log in. The secret holds a
+placeholder that is rejected on purpose, and the SSO sidecar exits at startup.
+The service still reports healthy. This is expected. Continue to step 2.
 
-**Step 2.** Register an OIDC application in your identity provider with
-the redirect URI:
+**Step 2 — register the application and write the secret.** In your identity
+provider, register an OIDC application with this redirect URI:
 
 ```
 https://<company.name>.<root_domain>/sso/callback
 ```
 
-Then write the connector JSON into the secret Terraform created. The
-secret path is `ewake/<tenant_name>/<company.name>/sso/<connector-id>`:
+Then write the connector JSON to
+`ewake/<tenant_name>/<company.name>/sso/<connector-id>`:
 
 ```sh
 cat > connector.json << 'EOF'
@@ -570,7 +502,7 @@ cat > connector.json << 'EOF'
   "config": {
     "clientID": "....apps.googleusercontent.com",
     "clientSecret": "...",
-    "redirectURI": "https://yourcompany.ewake.yourcompany.com/sso/callback",
+    "redirectURI": "https://yourcompany.ewake.example.com/sso/callback",
     "hostedDomains": ["yourcompany.com"]
   }
 }
@@ -581,11 +513,8 @@ aws secretsmanager put-secret-value \
   --secret-string file://connector.json
 ```
 
-For other providers, replace `"type": "oidc"` as needed — see
-[Connector examples](#connector-examples) below.
-
-**Step 3.** Apply again so Terraform reads the real secret and compiles
-it into the container environment, then force a redeploy:
+**Step 3 — apply again and redeploy.** Terraform reads the real secret and
+compiles it into the container configuration:
 
 ```sh
 terraform apply
@@ -595,16 +524,15 @@ aws ecs update-service \
   --force-new-deployment
 ```
 
-The login screen should now show your SSO provider.
+The login screen now shows your provider.
 
-Your IdP client secret stays in Secrets Manager **in your AWS account**.
-It is also present in the ECS task definition and in Terraform state
-(Terraform reads the secret at plan time to build the container config).
-Treat your state file accordingly.
+Your client secret stays in Secrets Manager in your AWS account. It is also
+present in the ECS task definition and in Terraform state, because Terraform
+reads it at plan time. Protect the state file accordingly.
 
 #### Connector examples
 
-**Generic OIDC (Okta, Entra ID, Auth0, Ping, any OIDC provider):**
+Generic OIDC — Okta, Entra ID, Auth0, Ping:
 
 ```json
 {
@@ -615,17 +543,17 @@ Treat your state file accordingly.
     "issuer": "https://yourcompany.okta.com",
     "clientID": "0oa...",
     "clientSecret": "...",
-    "redirectURI": "https://yourcompany.ewake.yourcompany.com/sso/callback",
+    "redirectURI": "https://yourcompany.ewake.example.com/sso/callback",
     "scopes": ["openid", "profile", "email"]
   }
 }
 ```
 
 For Microsoft Entra, use
-`"issuer": "https://login.microsoftonline.com/<tenant-id>/v2.0"`.
-Use a specific tenant ID, not `common`.
+`"issuer": "https://login.microsoftonline.com/<tenant-id>/v2.0"`. Use a specific
+tenant ID, not `common`.
 
-**Google:**
+Google:
 
 ```json
 {
@@ -635,13 +563,13 @@ Use a specific tenant ID, not `common`.
   "config": {
     "clientID": "....apps.googleusercontent.com",
     "clientSecret": "...",
-    "redirectURI": "https://yourcompany.ewake.yourcompany.com/sso/callback",
+    "redirectURI": "https://yourcompany.ewake.example.com/sso/callback",
     "hostedDomains": ["yourcompany.com"]
   }
 }
 ```
 
-**GitHub:**
+GitHub:
 
 ```json
 {
@@ -651,230 +579,69 @@ Use a specific tenant ID, not `common`.
   "config": {
     "clientID": "...",
     "clientSecret": "...",
-    "redirectURI": "https://yourcompany.ewake.yourcompany.com/sso/callback"
+    "redirectURI": "https://yourcompany.ewake.example.com/sso/callback"
   }
 }
 ```
 
-GitHub allows only one redirect URI per OAuth App, so each deployment
-needs its own: Settings → Developer settings → OAuth Apps → New.
+GitHub allows one redirect URI per OAuth App, so each deployment needs its own.
 
-### 3. Sign in
+### 3. Connect Slack
 
-The login screen shows the SSO providers you configured above. Click
-one and authenticate through your IdP.
+In the dashboard, open the Slack integration and choose **From a manifest**.
+Ewake generates the manifest. Create the app in your Slack workspace from it,
+install it, then paste the bot token and signing secret back into the dialog.
 
-### 4. Connect Slack
+Both are stored in Secrets Manager in your account. Inbound Slack events reach
+your deployment directly and are signature-verified locally.
 
-From the dashboard, open the Slack integration and choose **"From a
-manifest"**. Ewake generates an app manifest; create the app in your
-Slack workspace from it, install it, and paste the bot token + signing
-secret back into the dialog.
+### 4. Connect other integrations
 
-Both credentials are stored in Secrets Manager **in your AWS account**.
-Inbound Slack events hit your deployment directly and are
-signature-verified locally — nothing routes through Ewake.
+Datadog, GitLab, Grafana, Prometheus, Loki, Jira, Linear and PagerDuty connect
+from the dashboard using an API token or IAM role that you provide.
 
-### 5. Token / IAM-role integrations
+Not available in self-hosted deployments yet: GitHub App, GitHub SSO, Microsoft
+SSO, Google SSO and Notion. These use OAuth flows whose callback URL is
+registered against Ewake-hosted infrastructure.
 
-Datadog, GitLab, Grafana, Prometheus, Loki, Jira, Linear, and PagerDuty
-connect from the dashboard with an API token or IAM role you provide.
-No Ewake callback is involved.
+### 5. Schedule the ambient agents
 
-### 6. Ambient agents
+The ambient agents — knowledge graph, incident indexing, release watch, and the
+log, metric and span analysers — are deployed as Lambdas, but their schedules
+are created from the dashboard, not by Terraform. A new install has no
+schedules. Add them after connecting your integrations.
 
-The ambient agents (knowledge graph, incident indexing, release watch,
-log/metric/span analysis) are deployed as Lambdas but run on schedules
-created from the dashboard, not by Terraform. A fresh install has zero
-schedules — add them after connecting your integrations.
+## Updating
 
-### 7. Integrations not yet available
-
-GitHub App, GitHub SSO, Microsoft SSO, Google SSO, and Notion connect
-through OAuth flows whose callback URL is registered against
-Ewake-hosted infrastructure. These are not available in self-hosted
-deployments yet.
-
-## Updates
-
-To update to the latest stable release:
+Check out the repository tag you want, set `app_image_tag`, then:
 
 ```sh
+terraform plan
 terraform apply
 ```
 
-This applies database migrations first (as a one-off ECS task), then
-rolls the service. Both steps are skipped when the image tag hasn't
-changed.
+The apply runs database migrations first, as a one-off ECS task, then rolls the
+service. Both steps are skipped when the image tag has not changed.
 
-To pin a specific build (for rollback, or a hotfix Ewake gave you):
+`app_image_tag` pins the server, its database migrations and every Lambda, so
+the deployment moves as one version. It does not pin the sidecars — the SSO
+sidecar, CloudWatch MCP and log clustering track `latest`.
 
-```hcl
-app_image_tag = "ewake-v0.145.0"   # or "sha-1a2b3c4d"
-```
+Each release of this repository states the minimum application version it needs.
+Upgrade the repository and the image together.
 
-`app_image_tag` pins the reactive server, its database migrations, and
-every Lambda — the whole deployment moves as one version. It does **not**
-pin the sidecars (Dex, CloudWatch MCP, log clustering), which track
-`:latest`.
+To roll back, set `app_image_tag` to the previous version and apply. Note that
+database migrations are not reversed, so roll back to a version whose schema the
+database still satisfies.
 
-Lambda resolves an image tag to a digest once, when the function is
-deployed, and keeps running that digest. So a Lambda on a moving channel
-tag does not follow the channel: it stays where it was until some
-unrelated change — a new environment variable, say — makes Terraform
-update the function, at which point it jumps to whatever the channel
-points at *then*, with no migration having run. Pinning every image to
-one named version removes that: an upgrade is `app_image_tag`, plan,
-apply, and `db_migrate` gates the whole thing.
-
-### If an upgrade plans to replace the RDS subnet group
-
-A deployment first applied before this repo moved to `name_prefix` has a subnet
-group named exactly `<tenant_name>`. Current Terraform generates
-`<tenant_name>-<suffix>`, so the plan wants to replace the group — and then calls
-`ModifyDBInstance` to move the live database onto the new one. RDS refuses:
-
-```
-Error: updating RDS DB Instance (<tenant>): api error InvalidParameterCombination:
-You cannot move a DB instance with Multi-Az enabled to a VPC
-```
-
-Multi-AZ makes it a hard stop. Even single-AZ, repointing a running instance to
-another subnet group in the same VPC is not something RDS supports, and Terraform
-cannot sequence around it: `create_before_destroy` would plan the database itself
-create-before-destroy and fail on `DBInstanceAlreadyExists`, because
-`aws_db_instance` carries a fixed `identifier`.
-
-Nothing about the group actually needs to change — only the name's form. Keep the
-existing one:
-
-```sh
-terraform state show aws_db_subnet_group.this | grep '^\s*name '
-# or, if state is unavailable:
-aws rds describe-db-instances --db-instance-identifier <tenant_name> \
-  --query 'DBInstances[0].DBSubnetGroup.DBSubnetGroupName' --output text
-```
-
-```hcl
-rds_subnet_group_name = "<that name>"
-```
-
-The replacement disappears and no database is touched. Leave the variable unset on
-any deployment created since — Terraform manages the name, and this does not apply.
-
-### One-time: upgrading a deployment first applied before v1.0.0
-
-**Only deployments whose last apply predates the v1.0.0 tag need this.** Check
-with `terraform state list | grep aws_route.` — if that prints nothing, you are
-here. A fresh deployment is already correct; skip ahead.
-
-v1.0.0 pulled the default routes out of the route tables into standalone
-`aws_route` resources, and put the certificate behind a `count`. Terraform cannot
-work out on its own that the routes it wants to create are the ones AWS already
-has, so `terraform apply` fails with:
-
-```
-Error: creating Route in Route Table (rtb-...): RouteAlreadyExists
-```
-
-Fix it with three imports — but **do the two state moves first**. Terraform
-migrates `this` to `this[0]` automatically during plan and apply, and *not*
-during import, so importing first fails with `aws_acm_certificate.this is empty
-tuple`:
-
-```sh
-terraform state mv 'aws_acm_certificate.this'            'aws_acm_certificate.this[0]'
-terraform state mv 'aws_acm_certificate_validation.this' 'aws_acm_certificate_validation.this[0]'
-```
-
-Then find your route table IDs and import the default route from each:
-
-```sh
-terraform state show aws_route_table.public     | grep -m1 '^    id'
-terraform state show 'aws_route_table.private[0]' | grep -m1 '^    id'
-terraform state show 'aws_route_table.private[1]' | grep -m1 '^    id'
-
-terraform import 'aws_route.public_default'     '<public-rtb-id>_0.0.0.0/0'
-terraform import 'aws_route.private_default[0]' '<private-rtb-id-0>_0.0.0.0/0'
-terraform import 'aws_route.private_default[1]' '<private-rtb-id-1>_0.0.0.0/0'
-```
-
-`private_default[N]` matches `aws_route_table.private[N]`, which follows the
-order of `azs` — read the IDs out of state as above rather than guessing from the
-console.
-
-Then `terraform plan` should show no route creations, and you can apply
-normally.
-
-> The ALB security group is replaced during this upgrade: its description
-> changed, and descriptions are immutable in AWS. That is expected and takes
-> seconds. Deployments that last applied on v1.1.0 or earlier with a fixed group
-> name would have failed here with `InvalidGroup.Duplicate`; v1.1.1 switched the
-> group to a generated name so the replacement can happen in place.
-
-### One-time: moving the scheduled Lambdas onto the bundled image
-
-**Only deployments first applied before Ewake v0.150.0 need this.** A fresh
-deployment creates these functions on the bundled image already — skip ahead.
-
-The nine scheduled Lambdas (`knowledge-graph`, `incident-indexing`,
-`release-watch`, the Datadog and Loki analysers, and the two discovery
-loops) used to run from one ECR repository each. They now share a single
-`ewake-lambdas` image and select their handler with `image_config`. The
-old per-Lambda repositories are no longer built, so a deployment left on
-them silently freezes on its last image.
-
-Worse once the old repository is actually deleted on the Ewake side, which
-has now happened: AWS Lambda re-validates the *current* code artifact on
-every configuration change, so a function still pointing at a repository
-that no longer exists cannot be updated at all. Any apply that touches these
-functions — even one that only adds an environment variable — fails with:
-
-```
-Error: updating Lambda Function (<tenant>-<company>-knowledge-graph) configuration:
-ResourceConflictException: ... AWS Lambda does not have permission to access the
-provided code artifact. Please configure the required permissions in the ECR repository.
-```
-
-The message points at ECR permissions, which is misleading — the grant is
-fine, the repository is gone. The replace below is the fix; it recreates each
-function against the bundled image rather than trying to update one that
-cannot be read.
-
-`terraform apply` alone will **not** move them. Every Lambda in this stack
-carries `lifecycle { ignore_changes = [image_uri] }`, so changing the image
-is invisible to a normal plan. Replace them explicitly, once:
-
-```sh
-terraform apply $(for l in \
-  datadog-log-analysis loki-log-analysis datadog-metric-analysis \
-  datadog-span-analysis knowledge-graph incident-indexing \
-  release-watch custom-mcp-discovery kubernetes-discovery; do
-    printf ' -replace=module.company.module.scheduled_lambdas.aws_lambda_function.%s' "${l//-/_}"
-  done)
-```
-
-The plan should show nine functions replaced and nothing else. Each one is
-recreated in place under the same name and schedule; the EventBridge rules
-that invoke them are untouched. Expect a cold start on the next scheduled
-run, no other downtime.
-
-Verify afterwards that all nine report the bundled image:
-
-```sh
-aws lambda get-function --function-name <tenant_name>-<company.name>-knowledge-graph \
-  --query 'Code.ImageUri' --output text
-# → ...amazonaws.com/ewake-lambdas:stable
-```
-
-If a function still shows `ewake-lambda-knowledge-graph`, the replace did
-not take — re-run rather than leaving it. The old repositories have already
-been deleted, so a function left behind is wedged rather than merely stale.
+Some upgrades need a one-time step before the apply succeeds, and changing the
+hostname of a running deployment is a two-apply procedure. Both are in
+[UPGRADING.md](UPGRADING.md).
 
 ## Tearing down
 
-`terraform destroy` alone won't work — three resources have deletion
-protection to prevent accidental data loss.
+`terraform destroy` alone does not work. Three resources are protected against
+deletion.
 
 1. **Disable RDS deletion protection:**
 
@@ -884,23 +651,36 @@ protection to prevent accidental data loss.
      --no-deletion-protection --apply-immediately
    ```
 
-2. **Lift `prevent_destroy`** on the Neo4j EBS volume
-   (`modules/company_stack/neo4j.tf`) and the DLM role (`dlm.tf`).
-   Comment out the `lifecycle` blocks for the duration of the destroy.
+2. **Remove `prevent_destroy`** from the Neo4j EBS volume
+   (`modules/company_stack/neo4j.tf`) and the DLM role (`dlm.tf`). Comment out
+   the `lifecycle` blocks for the duration of the destroy. Take a snapshot first
+   if the graph data matters.
 
-3. **Run `terraform destroy`.** Expect ~15 min.
+3. **Run `terraform destroy`.** Allow about 45 minutes.
 
-4. **Manual cleanup** (not in Terraform state):
-   - CloudWatch log groups recreated mid-destroy by ECS/Lambda
-   - Secrets Manager entries with 30-day recovery windows
-   - The Route53 hosted zone (created out-of-band)
+   Most of that time is outside Terraform's control. AWS releases Lambda network
+   interfaces 20 to 40 minutes after the functions are deleted, and nothing —
+   security groups, subnets, the VPC — can be deleted until they are gone.
+   Terraform also times out after 10 minutes waiting for VPC endpoints that AWS
+   is still deleting. That is a timeout, not a failure: run `terraform destroy`
+   again and it finishes in seconds.
+
+4. **Clean up manually.** These are not in Terraform state:
+
+   - CloudWatch log groups recreated mid-destroy by ECS and Lambda
+   - Secrets Manager entries, which keep a 30-day recovery window
+   - The Route53 hosted zone, created outside Terraform
    - The state bucket
 
-## What's not included
+> **Delete the integration secrets if you intend to reinstall.** They are named
+> `ewake/<tenant_name>/<company.name>/integrations/...` and they outlive the
+> database. A reinstall writes new ones, and the old entries remain in their
+> recovery window, where they can block a later install that wants the same
+> name. Use `aws secretsmanager delete-secret --force-delete-without-recovery`
+> if you are sure.
 
-- **No orchestrator** — your deployment is self-contained. Slack events
-  arrive directly; API keys authenticate against your instance.
-- **No telemetry to Ewake** — no logs, metrics, traces, or usage data
-  leaves your account.
-- **No shared infrastructure** — every RDS, Neo4j, ECS task, Lambda, and
-  log group is in your account. Snapshots stay in your account.
+## Support
+
+Contact Ewake with your `tenant_name`, the repository tag and the
+`app_image_tag` you are running, plus the failing `terraform plan` or `apply`
+output.
