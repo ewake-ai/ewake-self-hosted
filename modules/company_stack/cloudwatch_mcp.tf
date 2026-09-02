@@ -1,5 +1,4 @@
 locals {
-  # `!local.is_byoc` keeps this local safe to evaluate when byoc sets the flag; the reactive task def's precondition is what blocks apply.
   cloudwatch_mcp_enabled = var.company.features.cloudwatchMcpSidecar && !local.is_byoc
 
   cloudwatch_mcp_url = local.cloudwatch_mcp_enabled ? "http://${local.task_host}:8931/mcp" : null
@@ -36,5 +35,5 @@ resource "aws_vpc_security_group_ingress_rule" "cloudwatch_mcp_self" {
   from_port                    = 8931
   to_port                      = 8931
   ip_protocol                  = "tcp"
-  description                  = "cloudwatch-mcp sidecar on 8931, from the Lambdas of this company only"
+  description                  = "cloudwatch-mcp sidecar on 8931, from this deployment's Lambdas only"
 }

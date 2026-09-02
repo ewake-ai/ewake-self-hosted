@@ -1,6 +1,6 @@
 # Role assumed by EventBridge Scheduler when a /lambda-schedules entry fires.
 # The parent company_stack iam.tf allows the task role to pass this exact
-# per-company role to scheduler.amazonaws.com when /lambda-schedules creates or
+# role to scheduler.amazonaws.com when /lambda-schedules creates or
 # updates a schedule.
 
 data "aws_iam_policy_document" "scheduler_lambda_assume" {

@@ -1,5 +1,5 @@
-# Per-company ALB target group + listener rule on the tenant's HTTPS listener.
-# Routes traffic for the company's public_id to its ECS service.
+# ALB target group + listener rule on the HTTPS listener.
+# Routes traffic for this deployment's public_id to its ECS service.
 
 resource "aws_lb_target_group" "reactive" {
   name        = substr("${local.arn_prefix}-rx", 0, 32)

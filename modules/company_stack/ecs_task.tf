@@ -1,10 +1,9 @@
-# Per-company ECS service for the reactive dashboard (the long-running web app).
-# The task pulls its image from the shared "reactive" ECR repo and connects to
-# the tenant's RDS through the per-company DB credentials secret. Terraform pins a
-# channel tag, which only a brand-new company ever boots on; CI owns the deployed tag.
+# ECS service for the reactive dashboard (the long-running web app).
+# The task pulls its image from the "reactive" ECR repo and connects to
+# RDS through the DB credentials secret. Terraform pins a
+# channel tag; CI owns the deployed tag.
 
 locals {
-  # Reports into Ewake's own instance, so byoc omits it and the app reads absent as off.
   _admin_notify_env = !local.is_byoc && var.admin_notify_url != null ? [
     { name = "EWAKE_ADMIN_NOTIFY_URL", value = var.admin_notify_url }
   ] : []
@@ -17,7 +16,6 @@ locals {
     # No agent sidecar here, so an initialised tracer would export to a refused localhost:8126 for the life of the task.
     { name = "DD_TRACE_ENABLED", value = "false" },
     ] : [
-    # Ships every log line to Ewake's Grafana Cloud; absent reads as false in byoc.
     { name = "GRAFANA_ENABLED", value = "true" },
     { name = "DD_ENV", value = "production" },
     # Per-container env: the sidecar's DD_SITE does not reach here, and agentless builds its endpoint from it.
@@ -34,9 +32,6 @@ locals {
     { name = "DD_FEATURE_FLAGS_CONFIGURATION_SOURCE_AGENTLESS_POLL_INTERVAL_SECONDS", value = "300" },
     # NODE_OPTIONS above inits the tracer first, so the provider is built before app code can pass its own timeout.
     { name = "DD_EXPERIMENTAL_FLAGGING_PROVIDER_INITIALIZATION_TIMEOUT_MS", value = "3000" },
-    # LangSmith tracing on; the endpoint/project/key come from the "langsmith"
-    # secret via the secrets block below so the dashboard can resolve trace
-    # links (Source of Truth) for this tenant's project.
     { name = "LANGSMITH_TRACING", value = "true" },
   ]
 
@@ -98,7 +93,7 @@ resource "aws_ecs_task_definition" "reactive" {
         { name = "NODE_ENV", value = "production" },
         { name = "PORT", value = "3000" },
         { name = "AWS_REGION", value = var.aws_region },
-        # Scheduler role ARNs are built from it; a hardcoded one is a cross-account PassRole in byoc.
+        # Scheduler role ARNs are built from it.
         { name = "AWS_ACCOUNT_ID", value = data.aws_caller_identity.current.account_id },
         { name = "CLIENT", value = var.company.name },
         { name = "COMPANY_DOMAIN", value = var.company.domain },
@@ -134,18 +129,12 @@ resource "aws_ecs_task_definition" "reactive" {
         # gets, so the login page and Dex cannot disagree about which SSOs exist.
         { name = "DEX_CONNECTORS", value = local.dex_connectors },
         ],
-        # Absence puts the app in standalone mode (the normal byoc shape): the OAuth connect
-        # routers under /auth unmount, and Slack team-route registration is skipped. Slack event
-        # receive and api-key auth do NOT unmount — they switch to verifying locally instead of
-        # trusting the orchestrator. See company_stack/variables.tf above orchestrator_url.
         var.orchestrator_url != null ? [
           { name = "EWAKE_ORCHESTRATOR_URL", value = var.orchestrator_url }
         ] : [],
         local.reactive_container_env,
       local._admin_notify_env)
-      # Scoped per company, since there's no shared blob.
       secrets = concat([
-        # Both resolve in either mode, so they sit outside the byoc split below.
         { name = "DEX_CLIENT_SECRET", valueFrom = local.dex_client_secret_value_from },
         { name = "POSTGRES_HOST", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:host::" },
         { name = "POSTGRES_PORT", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:port::" },
@@ -196,7 +185,6 @@ resource "aws_ecs_task_definition" "reactive" {
       }
     }
     ],
-    # Ewake's own agent — absent in byoc, where CloudWatch is the only sink.
     local.is_byoc ? [] : [
       {
         name      = "datadog-agent"
@@ -227,11 +215,11 @@ resource "aws_ecs_task_definition" "reactive" {
 
   tags = local.tags
 
-  # Precondition (not `check`) so a missing token ARN fails at plan; the sidecar's EWAKE_INTERNAL_TOKEN sources from orchestrator_internal_token_secret_arn, which is null in byoc (no orchestrator) and null on saas until shared has been applied.
+  # Precondition (not `check`) so a missing token ARN fails at plan; the sidecar's EWAKE_INTERNAL_TOKEN sources from orchestrator_internal_token_secret_arn.
   lifecycle {
     precondition {
       condition     = !(var.company.features.cloudwatchMcpSidecar && var.orchestrator_internal_token_secret_arn == null)
-      error_message = "features.cloudwatchMcpSidecar cannot be true without orchestrator_internal_token_secret_arn: the sidecar's EWAKE_INTERNAL_TOKEN sources from that secret. Byoc has no orchestrator — leave the flag off."
+      error_message = "features.cloudwatchMcpSidecar cannot be true without orchestrator_internal_token_secret_arn: the sidecar's EWAKE_INTERNAL_TOKEN sources from that secret."
     }
 
     # Agentless resolves its endpoint from DD_SITE and authenticates with DD_API_KEY, and a missing or
@@ -362,7 +350,6 @@ resource "terraform_data" "reactive_deploy" {
   ]
 }
 
-# Reactive ECS logs → Datadog via the shared forwarder.
 resource "aws_cloudwatch_log_subscription_filter" "reactive_ecs_to_datadog" {
   count           = local.is_byoc ? 0 : 1
   name            = "${local.arn_prefix}-reactive-ecs-to-datadog"

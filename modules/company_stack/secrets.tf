@@ -1,6 +1,6 @@
-# Per-company secrets in Secrets Manager. The DB credential secret lives in
+# Secrets in Secrets Manager. The DB credential secret lives in
 # rds_db.tf because it's tightly coupled to the postgresql provider; this file
-# is the place for additional per-company secrets if they appear later.
+# is the place for additional secrets if they appear later.
 #
 # Naming convention: ${var.project_name}/${var.tenant_name}/${var.company.name}/<name>
 # IAM (iam.tf) restricts the task role to this prefix.
@@ -13,7 +13,6 @@
 # The SecretsScopedToCompany statement in iam.tf already covers this prefix
 # (Get/Describe + Create/Update/Delete/Restore + TagResource).
 
-# Ewake-owned, so absent in a customer account: byoc must not read it at all, or the plan fails.
 data "aws_secretsmanager_secret" "langsmith" {
   count = local.is_byoc ? 0 : 1
   name  = "langsmith"
@@ -24,7 +23,7 @@ data "aws_secretsmanager_secret_version" "langsmith" {
   secret_id = "langsmith"
 }
 
-# Lambda has no `valueFrom` equivalent — reactive + knowledge-graph read GithubService, so their env vars are inlined at plan time. Same as langsmith below.
+# Lambda has no `valueFrom` equivalent — reactive + knowledge-graph read GithubService, so their env vars are inlined at plan time.
 data "aws_secretsmanager_secret_version" "github_app" {
   count     = !local.is_byoc && var.github_app_secret_arn != null ? 1 : 0
   secret_id = var.github_app_secret_arn
@@ -36,7 +35,7 @@ data "aws_secretsmanager_secret_version" "datadog_api_key" {
   secret_id = var.datadog_api_key_secret_arn
 }
 
-# Per-company byoc replacement for ewake-secrets (JWT_SECRET today). Generated once on first apply; rotations happen out-of-band so we don't clobber a live secret.
+# Holds JWT_SECRET today. Generated once on first apply; rotations happen separately so we don't clobber a live secret.
 resource "random_password" "jwt_secret" {
   count            = local.is_byoc ? 1 : 0
   length           = 64
@@ -53,7 +52,7 @@ resource "random_password" "dex_client_secret" {
   override_special = "!#$%^&*()-_=+[]{}<>?"
 }
 
-# Authenticates the Lambda's calls to its own reactive server; byoc has no orchestrator to mint it.
+# Authenticates the Lambda's calls to its own reactive server.
 resource "random_password" "orchestrator_secret" {
   count            = local.is_byoc ? 1 : 0
   length           = 64
@@ -74,11 +73,11 @@ resource "random_password" "admin_password" {
 resource "aws_secretsmanager_secret" "app" {
   count       = local.is_byoc ? 1 : 0
   name        = "${local.ssm_path}/app"
-  description = "Per-company application secrets: ADMIN_PASSWORD, JWT_SECRET, DEX_CLIENT_SECRET, ORCHESTRATOR_SECRET."
+  description = "Application secrets: ADMIN_PASSWORD, JWT_SECRET, DEX_CLIENT_SECRET, ORCHESTRATOR_SECRET."
   tags        = local.tags
 }
 
-# No ignore_changes, unlike the operator-seeded secrets in shared/: terraform generates these and
+# No ignore_changes: terraform generates these and
 # is the only writer, so suppressing updates would only stop a new key reaching existing installs.
 resource "aws_secretsmanager_secret_version" "app" {
   count     = local.is_byoc ? 1 : 0

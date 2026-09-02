@@ -5,14 +5,14 @@ resource "aws_cloudwatch_log_group" "knowledge_graph" {
 }
 
 locals {
-  # Only knowledge-graph in the scheduled fleet imports GithubService, so the other scheduled Lambdas don't get these env keys.
+  # Only knowledge-graph among the scheduled Lambdas imports GithubService, so the other scheduled Lambdas don't get these env keys.
   knowledge_graph_github_env = var.github_app_enabled ? {
     GITHUB_CLIENT_ID       = jsondecode(var.github_app_secret_string)["CLIENT_ID"]
     GITHUB_CLIENT_SECRET   = jsondecode(var.github_app_secret_string)["CLIENT_SECRET"]
     GITHUB_APP_PRIVATE_KEY = jsondecode(var.github_app_secret_string)["APP_PRIVATE_KEY"]
   } : {}
 
-  # Only knowledge-graph registers a flag provider, so the rest of the fleet gets neither these keys nor the API key.
+  # Only knowledge-graph registers a flag provider, so the other scheduled Lambdas get neither these keys nor the API key.
   # Agentless because this is the one runtime with neither an agent nor an extension to carry remote config.
   # Gated on the bool, never on the key: a condition over a sensitive value marks the whole env map sensitive.
   knowledge_graph_flag_env = var.datadog_enabled ? {
@@ -23,7 +23,7 @@ locals {
     } : {
     # Stated, not omitted: the tracer defaults to enabled and agentless, so silence buys a 30s stall on every cold start.
     DD_FEATURE_FLAGS_ENABLED = "false"
-    # byoc has no agent to receive spans, and an initialised tracer would export to a port nothing listens on.
+    # With no agent to receive spans, an initialised tracer would export to a port nothing listens on.
     DD_TRACE_ENABLED = "false"
   }
 

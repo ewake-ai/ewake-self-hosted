@@ -7,7 +7,7 @@ resource "aws_security_group" "alb" {
   # unrecoverable without hand-deleting the group the live ALB is using. The generated suffix
   # lets the two coexist for the seconds it takes to swap; tags.Name stays readable.
   name_prefix = "${var.tenant_name}-alb-"
-  description = "Tenant ALB ingress, from var.alb_ingress_cidrs (the public internet by default)"
+  description = "ALB ingress, from var.alb_ingress_cidrs (the public internet by default)"
   vpc_id      = aws_vpc.this.id
 
   lifecycle {
@@ -44,11 +44,11 @@ resource "aws_security_group" "alb" {
 
 resource "aws_security_group" "ecs_task" {
   # Ingress is deliberately NOT inline:
-  # for the full explanation. company_stack's per-company rules live on its own
-  # SG (modules/company_stack/task_discovery.tf), so nothing attaches here but
+  # for the full explanation. company_stack's rules live on its own SG
+  # (modules/company_stack/task_discovery.tf), so nothing attaches here but
   # ecs_task_from_alb below.
   name        = "${var.tenant_name}-ecs-task"
-  description = "Tenant ECS task ingress from the tenant ALB only"
+  description = "ECS task ingress from the ALB only"
   vpc_id      = aws_vpc.this.id
 
   egress {
@@ -73,7 +73,7 @@ resource "aws_vpc_security_group_ingress_rule" "ecs_task_from_alb" {
 
 resource "aws_security_group" "rds" {
   name        = "${var.tenant_name}-rds"
-  description = "Tenant RDS Postgres ingress from ECS tasks in this VPC only"
+  description = "RDS Postgres ingress from ECS tasks in this VPC only"
   vpc_id      = aws_vpc.this.id
 
   ingress {

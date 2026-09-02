@@ -1,8 +1,5 @@
-# Every company gets an internal name for its reactive task, whether or not it runs a
-# sidecar. Without one the Lambdas address reactive as https://<company>.ewake.ai, which
-# resolves to the internet-facing ALB's public addresses even from inside the VPC — there
-# is no private zone for ewake.ai — so every internal call hairpins out through the NAT
-# gateway and back to a task two subnets away.
+# Gives the reactive task an internal DNS name so the Lambdas reach it inside the
+# VPC instead of resolving to the public-facing ALB.
 #
 resource "aws_service_discovery_private_dns_namespace" "task" {
   name        = "${var.company.name}.internal"
@@ -11,14 +8,12 @@ resource "aws_service_discovery_private_dns_namespace" "task" {
   tags        = local.tags
 }
 
-# Superseded by the namespace above and left empty on purpose. Cloud Map refuses to delete
-# a namespace whose services still have registered instances, and ECS deregisters
-# asynchronously, so destroying it in the same apply that moves the registration races.
-# Removed in a follow-up once it is confirmed empty; an unused private zone costs cents.
+# Left empty on purpose: Cloud Map refuses to delete a namespace whose services
+# still have registered instances, and ECS deregisters asynchronously.
 resource "aws_service_discovery_private_dns_namespace" "mcp" {
   name        = "${var.company.name}.mcp.internal"
   vpc         = var.vpc_id
-  description = "Superseded by ${var.company.name}.internal; pending removal"
+  description = "MCP discovery namespace for ${var.company.name}"
   tags        = local.tags
 }
 
@@ -54,10 +49,9 @@ locals {
   internal_reactive_base_url = "http://${local.task_host}:3000"
 }
 
-# One per-company group for everything that talks to this task internally. These rules
-# cannot live on the tenant ECS task SG: that group is declared once per tenant
-# and handed to every company, so a
-# self-referencing rule there admits every sibling company in the tenant.
+# A dedicated group for everything that talks to this task internally. These rules
+# cannot live on the shared ECS task SG: a self-referencing rule there would admit
+# every task that shares that group.
 resource "aws_security_group" "internal" {
   name = "${local.arn_prefix}-internal"
   # No apostrophe: EC2 rejects one in a security group description.
@@ -73,5 +67,5 @@ resource "aws_vpc_security_group_ingress_rule" "internal_reactive" {
   from_port                    = 3000
   to_port                      = 3000
   ip_protocol                  = "tcp"
-  description                  = "reactive internal API, from the Lambdas of this company only"
+  description                  = "reactive internal API, from this deployment's Lambdas only"
 }

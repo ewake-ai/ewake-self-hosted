@@ -1,8 +1,7 @@
-# Per-company reactive processor Lambda. SQS-triggered (batch_size=1). Packaged as
+# Reactive processor Lambda. SQS-triggered (batch_size=1). Packaged as
 # a container image so it can bundle the Datadog Lambda extension and tracer.
 
 locals {
-  # null in byoc — company_stack doesn't read the Ewake-owned "langsmith" secret there.
   langsmith_secret = var.langsmith_enabled ? jsondecode(var.langsmith_secret_string) : null
 
   # Mastra code agent tools running here use GithubService/appAuth.ts.
@@ -19,7 +18,7 @@ locals {
     }) : {
     # Stated, not omitted: the tracer defaults to enabled and agentless, so silence buys a 30s stall on every cold start.
     DD_FEATURE_FLAGS_ENABLED = "false"
-    # byoc has no agent to receive spans, and an initialised tracer would export to a port nothing listens on.
+    # With no agent to receive spans, an initialised tracer would export to a port nothing listens on.
     DD_TRACE_ENABLED = "false"
   }
 }
@@ -72,7 +71,7 @@ resource "aws_lambda_function" "reactive_processor" {
         LOG_CLUSTERING_FUNCTION_NAME = var.log_clustering_function_name
         JWT_SECRET                   = var.jwt_secret
       },
-      # Set in both modes; empty only before shared/ has been applied, and the server gates the
+      # Empty only before shared/ has been applied, and the server gates the
       # internal API on it either way — so an empty string would fail closed at the first result post.
       var.orchestrator_secret != "" ? {
         ORCHESTRATOR_SECRET = var.orchestrator_secret

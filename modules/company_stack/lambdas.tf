@@ -1,7 +1,7 @@
 # Lambdas owned by company_stack.
 #
 # `./lambdas` holds the reactive (SQS-triggered) Lambda as a flat .tf file
-# inside that child module. Log clustering is per-tenant, not per-company.
+# inside that child module.
 #
 # `./lambdas/scheduled` is its own sub-child module — one .tf per scheduled
 # Lambda, with the Type=Scheduled tag inherited from a local. Invoked
@@ -9,8 +9,6 @@
 # so we don't carry a thin scheduled.tf wrapper inside lambdas/.
 
 locals {
-  # Computed here because locals do not cross module boundaries: the two copies had nothing keeping
-  # them equal, so a DD_SITE or DD_ENV edit in one would have gone unnoticed. Per-runtime keys stay put.
   datadog_lambda_base_env = !local.is_byoc ? {
     DD_API_KEY_SECRET_ARN      = var.datadog_api_key_secret_arn
     DD_SITE                    = "datadoghq.eu"
@@ -63,8 +61,6 @@ module "lambdas" {
   orchestrator_secret = local.is_byoc ? random_password.orchestrator_secret[0].result : (
     var.orchestrator_internal_token_secret_arn != null ? one(data.aws_secretsmanager_secret_version.orchestrator_internal_token[*].secret_string) : ""
   )
-  # Generated per deployment,
-  # so that branch stays empty here rather than pretending to resolve it.
   jwt_secret                 = local.is_byoc ? random_password.jwt_secret[0].result : ""
   elasticsearch_enabled      = local.elasticsearch_enabled
   elasticsearch_url          = local.elasticsearch_enabled ? data.aws_ssm_parameter.elasticsearch_url[0].value : null

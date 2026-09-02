@@ -57,12 +57,12 @@ variable "neo4j_password" {
 }
 
 variable "datadog_base_env" {
-  description = "Datadog env shared by every Lambda in company_stack, computed once by the parent so the two child modules cannot drift. Empty in byoc. Per-runtime keys are merged on top by the Lambda that needs them."
+  description = "Datadog env shared by every Lambda in company_stack, computed once by the parent so the two child modules cannot drift. Per-runtime keys are merged on top by the Lambda that needs them."
   type        = map(string)
 }
 
 variable "deployment_mode" {
-  description = "saas or byoc. No default: a default could only ever fail open."
+  description = "No default: a default could only ever fail open."
   type        = string
 }
 
@@ -77,7 +77,7 @@ variable "langsmith_secret_string" {
 }
 
 variable "lambda_bundle_image_uri" {
-  description = "Consolidated image holding all nine scheduled handlers; each function selects its own via image_config. Replaces the nine per-function ewake-lambda-<name> repositories."
+  description = "Consolidated image holding all nine scheduled handlers; each function selects its own via image_config."
   type        = string
 }
 
@@ -90,44 +90,44 @@ variable "log_clustering_function_name" {
 }
 
 variable "log_clustering_sidecar_url" {
-  description = "Base URL of this company's log-clustering sidecar, or null when the feature is off. Null means the agent runtime keeps invoking the per-tenant Lambda."
+  description = "Base URL of the log-clustering sidecar, or null when the feature is off. Null means the agent runtime keeps invoking the Lambda."
   type        = string
 }
 
 variable "internal_sg_id" {
-  description = "Per-company security group reaching the log-clustering sidecar on 8000, or null when the feature is off — passing it unconditionally would attach it to every company's scheduled Lambdas and change companies that never opted in. Held alongside the tenant-wide ecs_task SG, which must not carry that rule: it is shared by every company in the tenant."
+  description = "Security group reaching the log-clustering sidecar on 8000, or null when the feature is off."
   type        = string
 }
 
 variable "langsmith_enabled" {
-  description = "False in byoc, where the Ewake-owned \"langsmith\" secret does not exist and no trace may leave the customer account."
+  description = "Whether LangSmith tracing is enabled."
   type        = bool
 }
 
 variable "github_app_enabled" {
-  description = "True when the shared GitHub App secret is provisioned. Same bool-gate-not-secret-gate pattern as langsmith_enabled — only knowledge-graph.tf reads it."
+  description = "True when the GitHub App secret is provisioned. Same bool-gate-not-secret-gate pattern as langsmith_enabled — only knowledge-graph.tf reads it."
   type        = bool
 }
 
 variable "github_app_secret_string" {
-  description = "Raw JSON of the shared GitHub App secret (CLIENT_ID, CLIENT_SECRET, APP_PRIVATE_KEY). Decoded inside knowledge-graph.tf and injected as env vars. Nullable — read only when github_app_enabled is true."
+  description = "Raw JSON of the GitHub App secret (CLIENT_ID, CLIENT_SECRET, APP_PRIVATE_KEY). Decoded inside knowledge-graph.tf and injected as env vars. Nullable — read only when github_app_enabled is true."
   type        = string
   sensitive   = true
 }
 
 variable "datadog_enabled" {
-  description = "False in byoc: Ewake's own telemetry (agent, Lambda extension, forwarder) must not run in a customer account. The customer-facing Datadog *integration* is unaffected."
+  description = "Whether the Datadog agent, Lambda extension, and forwarder run."
   type        = bool
 }
 
 variable "datadog_api_key" {
-  description = "Raw Datadog API key for the knowledge-graph Lambda's agentless feature-flag source. Plaintext, not JSON, so it needs no jsondecode. Nullable — null in byoc, where flags stay off."
+  description = "Raw Datadog API key for the knowledge-graph Lambda's agentless feature-flag source. Plaintext, not JSON, so it needs no jsondecode. Nullable — null when flags are off."
   type        = string
   sensitive   = true
 }
 
 variable "company_base_url" {
-  description = "This company's own https URL. Not read by these functions, but the application requires the base URLs at startup in every runtime."
+  description = "The deployment's own https URL. Not read by these functions, but the application requires the base URLs at startup in every runtime."
   type        = string
 }
 
@@ -141,11 +141,6 @@ variable "sso_base_url" {
   type        = string
 }
 
-# Half of the Secrets Manager path every integration credential is written under,
-# ewake/<TENANT>/<CLIENT>/integrations/... . Passed in rather than read from
-# terraform.workspace: byoc has no workspaces, so the workspace is the literal
-# "default" and these functions looked under a prefix nothing writes to and
-# iam.tf does not grant.
 variable "tenant_name" {
   type = string
 }

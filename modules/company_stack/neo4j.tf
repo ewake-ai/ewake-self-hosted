@@ -1,10 +1,10 @@
-# Per-company self-hosted Neo4j 5 Community on a single EC2 + EBS. Credentials
+# Self-hosted Neo4j 5 Community on a single EC2 + EBS. Credentials
 # are written to `${local.ssm_path}/neo4j` and consumed by the reactive ECS task
 # and the scheduled Lambdas as env vars. Naming and shape mirror the RDS
-# per-company secret in rds_db.tf.
+# secret in rds_db.tf.
 
 locals {
-  # EBS volumes are AZ-bound; the instance must live in the same AZ. Tenant
+  # EBS volumes are AZ-bound; the instance must live in the same AZ. The
   # ECS tasks span all private subnets and reach here across AZs within the VPC.
   neo4j_subnet_id = var.private_subnets[0]
 
@@ -94,7 +94,7 @@ resource "aws_iam_instance_profile" "neo4j" {
 
 resource "aws_security_group" "neo4j" {
   name        = "${local.arn_prefix}-neo4j"
-  description = "Neo4j bolt ingress from the tenant ECS task SG only"
+  description = "Neo4j bolt ingress from the ECS task SG only"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -146,7 +146,7 @@ resource "aws_ebs_volume" "neo4j_data" {
 }
 
 # AMI and user_data are pinned via ignore_changes so terraform never
-# re-provisions the node silently — bumping them is an explicit, out-of-band
+# re-provisions the node silently — bumping them is an explicit, deliberate
 # change.
 resource "aws_instance" "neo4j" {
   ami                    = data.aws_ami.al2023_arm64.id

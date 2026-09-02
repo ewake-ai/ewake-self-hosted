@@ -1,27 +1,21 @@
 # Dex, the identity provider, as a sidecar of the reactive task.
 #
-# Not a service of its own and not shared across companies: customers self-host
-# reactive without an orchestrator, so nothing in the login path may live outside this
+# Not a service of its own: nothing in the login path may live outside this
 # task. Dex binds loopback in the shared network namespace and reactive proxies /dex to
 # it, which is also the URL its issuer claims.
 #
-# Present exactly when the company has a connector. It used to be unconditional, on the
-# grounds that SSO was the only way anyone logs in and a connectorless company was simply
+# Present exactly when there is a connector. It used to be unconditional, on the
+# grounds that SSO was the only way anyone logs in and a connectorless deployment was simply
 # broken — password login is what makes that a valid state instead. Dex refuses to start on
 # an empty connector list, and restartPolicy below retries it forever, so leaving it mounted
 # costs a permanent crash loop and a log group full of its failures.
 #
-# Not a per-company feature toggle: it tracks sso_connectors, the same value reactive gates
+# It tracks sso_connectors, the same value reactive gates
 # its password endpoint on, so the two cannot disagree about which login a deployment gets.
 
 locals {
   # The origin the BROWSER drives the OIDC hops against, and what a provider's redirect URI
-  # is registered against. The orchestrator where there is one, so a provider that allows a
-  # single redirect URI serves the whole fleet from one registration; it then routes each
-  # callback back to this company. That makes the orchestrator load-bearing for login.
-  #
-  # byoc has no orchestrator, so it falls through to the company's own host and the login
-  # path stays self-contained — which is why the sidecar exists at all.
+  # is registered against.
   dex_base_url = coalesce(
     var.sso_base_url,
     var.orchestrator_url,
@@ -31,8 +25,8 @@ locals {
   # The connectors compiled into the one array both containers read. Assembling here rather
   # than letting ECS resolve a secret is a deliberate trade: valueFrom maps one variable to
   # one secret and cannot concatenate, so a per-connector layout means terraform reads the
-  # values. They therefore appear in the task definition and in terraform state, where the
-  # aggregate secret never put them — treat state as holding customer OAuth credentials.
+  # values. They therefore appear in the task definition and in terraform state — treat state
+  # as holding customer OAuth credentials.
   dex_connectors = jsonencode([
     for id in var.company.sso_connectors :
     jsondecode(data.aws_secretsmanager_secret_version.sso_connector[id].secret_string)
@@ -41,9 +35,6 @@ locals {
   # Not a secret: it only names reactive's client registration inside Dex. The matching
   # secret is DEX_CLIENT_SECRET, below.
   dex_client_id = "ewake-reactive"
-
-  # Both containers need it, and where it lives depends on the deployment mode: byoc has
-  # no shared secret, so it reads the per-company `app` secret alongside JWT_SECRET;
 
   dex_client_secret_value_from = local.is_byoc ? "${one(aws_secretsmanager_secret.app[*].arn)}:DEX_CLIENT_SECRET::" : "${var.dex_secret_arn}:SECRET::"
 
@@ -88,7 +79,7 @@ locals {
     # update-reactive-service.yml runs it to completion before repointing the service,
     # so the schema is already there by the time this container is ever placed.
     #
-    # The one window that ordering does not cover is a brand-new company, where
+    # The one window that ordering does not cover is a brand-new install, where
     # terraform creates the service before any deploy has run a migration. The restart
     # policy above is what covers it: Dex retries, and essential = false keeps the
     # failures off the rest of the task.
@@ -103,7 +94,7 @@ locals {
   }] : []
 }
 
-# The connectors this company can log in with: a JSON array of complete Dex connector
+# The connectors this deployment can log in with: a JSON array of complete Dex connector
 # objects, read by the sidecar as its `connectors` block and by reactive to render the
 # login page. One secret per connector so adding a provider is a new secret rather than a
 # rewrite of everyone else's — see sidecars/dex/README.md.
@@ -118,7 +109,7 @@ resource "aws_secretsmanager_secret_version" "sso_connector" {
   # Keyed off the variable, not off aws_secretsmanager_secret.sso_connector. for_each keys
   # must be known at plan time, and a resource map reads as wholly unknown while its
   # instances are still to be created — so keying off the resource fails the first apply
-  # of any company that actually has connectors:
+  # of any install that actually has connectors:
   #
   #   Invalid for_each argument: aws_secretsmanager_secret.sso_connector will be known
   #   only after apply
@@ -140,10 +131,6 @@ resource "aws_secretsmanager_secret_version" "sso_connector" {
   }
 }
 
-# The aggregate this replaced. Still declared, and deliberately: removing it from the config
-# is a destroy, and it holds every connector a company is currently logging in with. It stays
-# through this release so the cutover is reversible — nothing reads it any more — and comes
-# out in a later one, once every company's per-connector secrets are populated.
 resource "aws_secretsmanager_secret" "company_sso" {
   name = "${local.ssm_path}/sso"
   tags = local.tags

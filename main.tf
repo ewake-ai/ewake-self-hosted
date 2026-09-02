@@ -1,6 +1,4 @@
-# Single instantiation of company_stack for this deployment. Every "byoc"
-# override is expressed here — the module already gates its own shape on
-# deployment_mode = "byoc" (see company_stack/variables.tf's is_byoc local).
+# Single instantiation of company_stack for this deployment.
 
 module "company" {
   source = "./modules/company_stack"

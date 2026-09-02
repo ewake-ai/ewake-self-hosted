@@ -41,7 +41,7 @@ resource "aws_security_group" "vpc_link" {
   count = local.public_inbound_gateway ? 1 : 0
 
   name_prefix = "${var.tenant_name}-vpc-link-"
-  description = "API Gateway VPC link to the tenant ALB"
+  description = "API Gateway VPC link to the ALB"
   vpc_id      = aws_vpc.this.id
 
   lifecycle {
@@ -112,8 +112,7 @@ resource "aws_apigatewayv2_route" "public_inbound" {
     # block, so it is inbound rather than something a browser asks for.
     "GET /android-chrome-512x512.png",
     # Deployment events from the customer's CI. Authenticated by an API key
-    # minted in the dashboard, which the caller presents directly because a
-    # self-hosted deployment has no orchestrator in front to resolve it.
+    # minted in the dashboard, which the caller presents directly.
     "POST /api/v1/events/deployment",
   ]) : toset([])
 
