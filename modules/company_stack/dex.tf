@@ -44,7 +44,7 @@ locals {
 
   # Both containers need it, and where it lives depends on the deployment mode: byoc has
   # no shared secret, so it reads the per-company `app` secret alongside JWT_SECRET;
-  # saas reads the dedicated vendor secret, the same shape jwt.tf and google.tf use.
+
   dex_client_secret_value_from = local.is_byoc ? "${one(aws_secretsmanager_secret.app[*].arn)}:DEX_CLIENT_SECRET::" : "${var.dex_secret_arn}:SECRET::"
 
   dex_containers = length(var.company.sso_connectors) > 0 ? [{

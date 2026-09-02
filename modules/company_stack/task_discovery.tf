@@ -56,7 +56,7 @@ locals {
 
 # One per-company group for everything that talks to this task internally. These rules
 # cannot live on the tenant ECS task SG: that group is declared once per tenant
-# (terraform/tenants/security_groups.tf) and handed to every company, so a
+# and handed to every company, so a
 # self-referencing rule there admits every sibling company in the tenant.
 resource "aws_security_group" "internal" {
   name = "${local.arn_prefix}-internal"

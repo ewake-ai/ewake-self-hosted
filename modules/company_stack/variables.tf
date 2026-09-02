@@ -1,5 +1,5 @@
 variable "company" {
-  description = "One company entry from tenants/registry.json, with `name` merged in from its map key. image_tag is intentionally NOT here — the reactive image tag is resolved from ECR at plan time (see ecs_task.tf)."
+  description = "One company entry from the deployment configuration, with `name` merged in from its map key. image_tag is intentionally NOT here — the reactive image tag is resolved from ECR at plan time (see ecs_task.tf)."
   type = object({
     name          = string
     public_id     = string
@@ -71,7 +71,7 @@ variable "sso_base_url" {
 #   - Slack team-route registration against the orchestrator is skipped.
 # See the API route table in the README for the paths involved.
 variable "orchestrator_url" {
-  description = "Public HTTPS URL of the shared orchestrator service (terraform/shared orchestrator module 'url' output). The reactive admin API calls it to list/remove Slack team routes. Null in byoc — there is no orchestrator, and the app runs in standalone mode (see the comment above for exactly what that changes)."
+  description = "Public HTTPS URL of the shared orchestrator service. The reactive admin API calls it to list/remove Slack team routes. Null in byoc — there is no orchestrator, and the app runs in standalone mode (see the comment above for exactly what that changes)."
   type        = string
   default     = null
   nullable    = true
@@ -165,7 +165,7 @@ variable "rds_master_secret_arn" {
 }
 
 variable "bootstrap_lambda_function_name" {
-  description = "Name of the tenant's RDS bootstrap Lambda (terraform/tenants/bootstrap_lambda.tf). Invoked once per company create/update to create the role + database + pgvector extension inside the VPC."
+  description = "Name of the tenant's RDS bootstrap Lambda. Invoked once per company create/update to create the role + database + pgvector extension inside the VPC."
   type        = string
 }
 
@@ -183,14 +183,9 @@ variable "datadog_api_key_secret_arn" {
   nullable = true
 }
 
-# github_app_secret_arn and notion_secret_arn are Ewake-account OAuth client credentials,
-# null in byoc for one shared reason: an authorization-code flow needs a callback URL
-# registered with the provider, and ours is Ewake-hosted, so a customer deployment can't
-# complete the round trip. That is a property of OAuth *connect* flows only, not of the
-# integration behind them — Slack is fully available in byoc via manifest install.
-#
-# The operator-login providers that used to sit here are gone: login is the Dex sidecar
-# now, on both SaaS and byoc.
+# Null here: an authorization-code flow needs a callback URL registered with the
+# provider, and that callback is Ewake-hosted. This limits OAuth connect flows
+# only, not the integrations behind them — Slack installs from a manifest.
 
 variable "github_app_secret_arn" {
   description = "Secrets Manager ARN of Ewake's GitHub App credentials (JSON with CLIENT_ID, CLIENT_SECRET, APP_PRIVATE_KEY). Null in byoc: the GitHub App install is an OAuth flow whose callback is Ewake-hosted, so a customer deployment can't complete it."
@@ -207,14 +202,14 @@ variable "notion_secret_arn" {
 }
 
 variable "dex_secret_arn" {
-  description = "Secrets Manager ARN of the SaaS Dex OIDC client secret (JSON with SECRET). Null in byoc, which uses the per-company `app` secret's random DEX_CLIENT_SECRET."
+  description = "Secrets Manager ARN of a shared Dex OIDC client secret (JSON with SECRET). Null here, which uses the per-company `app` secret's random DEX_CLIENT_SECRET."
   type        = string
   default     = null
   nullable    = true
 }
 
 variable "jwt_secret_arn" {
-  description = "Secrets Manager ARN of the SaaS JWT signing secret (JSON with SECRET). Null in byoc, which uses the per-company `app` secret's random JWT_SECRET."
+  description = "Secrets Manager ARN of a shared JWT signing secret (JSON with SECRET). Null here, which uses the per-company `app` secret's random JWT_SECRET."
   type        = string
   default     = null
   nullable    = true
@@ -260,7 +255,7 @@ variable "db_migrate_image_uri" {
 }
 
 variable "log_clustering_function_name" {
-  description = "Name of the tenant's shared log-clustering Lambda (terraform/tenants/log_clustering.tf). Injected as LOG_CLUSTERING_FUNCTION_NAME into every runtime that clusters logs."
+  description = "Name of the tenant's shared log-clustering Lambda. Injected as LOG_CLUSTERING_FUNCTION_NAME into every runtime that clusters logs."
   type        = string
 }
 
@@ -288,10 +283,9 @@ variable "neo4j_instance_type" {
   default     = "t4g.small"
 }
 
-# No default, here or in the child modules: with one, a byoc root that omitted
-# the argument would silently get saas egress. Without one, the plan fails.
+# No default, here or in the child modules: a default could only ever fail open.
 variable "deployment_mode" {
-  description = "saas = Ewake's multi-tenant infrastructure. byoc = a single-company stack in a customer's own AWS account."
+  description = "saas = Ewake-hosted. byoc = a single-company stack in a customer's own AWS account."
   type        = string
 
   validation {
@@ -317,12 +311,9 @@ locals {
   arn_prefix = "${var.tenant_name}-${var.company.name}"
   ssm_path   = "${var.project_name}/${var.tenant_name}/${var.company.name}"
 
-  # This deployment's own public origin — every absolute URL the app hands to a browser,
-  # a provider, or Slack. Stated here rather than left to the application's fallback,
-  # is `https://${CLIENT}.ewake.ai` with our domain hardcoded: right by luck on saas, and
-  # in byoc a URL on Ewake's domain that the customer does not own and DNS cannot resolve.
   # The one name this deployment answers on. Route53, the listener rule and every
-  # absolute URL below read this, so they cannot drift apart.
+  # absolute URL below read this, so they cannot drift apart. Stated here rather
+  # than left to the application's fallback, which is on a domain you do not own.
   company_host = coalesce(var.company_host, "${var.company.name}.${var.root_domain}")
 
   company_base_url = "https://${local.company_host}"

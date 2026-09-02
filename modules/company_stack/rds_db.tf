@@ -1,6 +1,6 @@
 # Per-company database, roles, pgvector extension, and grants on the tenant's
 # RDS instance. All created by the tenant's RDS bootstrap Lambda
-# (terraform/tenants/bootstrap_lambda.tf), which runs inside the tenant VPC
+#, which runs inside the tenant VPC
 # and has direct network access to RDS. Replaces the cyrilgdn/postgresql
 # provider — terraform applies no longer need an SSM tunnel.
 #

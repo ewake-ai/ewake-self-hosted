@@ -1,14 +1,3 @@
-# NOTE(byoc-duplication): The tenant-level resources in this root (vpc.tf,
-# vpc_endpoints.tf, security_groups.tf, alb.tf, ecs_cluster.tf, rds.tf,
-# bootstrap_lambda.tf, log_clustering.tf) are direct copies of
-# terraform/tenants/*.tf with the workspace + registry references replaced by
-# variables. Any bug fix or infra change in terraform/tenants/ MUST be mirrored
-# here. Extraction into a shared module (terraform/modules/tenant_stack/) is
-# deliberately deferred until we can validate the state migration with real
-# `terraform plan` output on the SaaS tenants — moving resources into a module
-# changes their state addresses and one mis-issued `moved {}` block would
-# destroy live tenant infra.
-
 resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -26,11 +15,8 @@ resource "aws_subnet" "public" {
   cidr_block        = cidrsubnet(var.vpc_cidr, 4, count.index)
   availability_zone = var.azs[count.index]
 
-  # Diff from terraform/tenants/vpc.tf, which still has this true. Only the ALB
-  # and the NAT gateways live here, and both bring their own public addresses,
-  # so nothing needs it — and leaving it on hands a public IP to whatever gets
-  # put in a public subnet next. Mirror back into tenants/ when the SaaS roots
-  # get the same sweep.
+  # Only the ALB and the NAT gateways live here, and both bring their own public
+  # addresses. Leaving this on would hand a public IP to whatever is added next.
   map_public_ip_on_launch = false
 
   tags = {

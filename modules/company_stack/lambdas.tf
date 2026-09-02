@@ -1,8 +1,7 @@
 # Lambdas owned by company_stack.
 #
 # `./lambdas` holds the reactive (SQS-triggered) Lambda as a flat .tf file
-# inside that child module. Log clustering is per-tenant, not per-company —
-# see terraform/tenants/log_clustering.tf.
+# inside that child module. Log clustering is per-tenant, not per-company.
 #
 # `./lambdas/scheduled` is its own sub-child module — one .tf per scheduled
 # Lambda, with the Type=Scheduled tag inherited from a local. Invoked
@@ -64,7 +63,7 @@ module "lambdas" {
   orchestrator_secret = local.is_byoc ? random_password.orchestrator_secret[0].result : (
     var.orchestrator_internal_token_secret_arn != null ? one(data.aws_secretsmanager_secret_version.orchestrator_internal_token[*].secret_string) : ""
   )
-  # byoc generates its own; saas keeps JWT_SECRET in a shared secret this module never reads,
+  # Generated per deployment,
   # so that branch stays empty here rather than pretending to resolve it.
   jwt_secret                 = local.is_byoc ? random_password.jwt_secret[0].result : ""
   elasticsearch_enabled      = local.elasticsearch_enabled
