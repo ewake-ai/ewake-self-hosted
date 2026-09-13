@@ -347,6 +347,13 @@ resource "terraform_data" "reactive_deploy" {
     aws_ecs_service.reactive,
     terraform_data.db_migrate,
     aws_lambda_invocation.seed_company,
+    # The restart this forces is also what repoints the ambient-agent schedules onto the
+    # consolidated function, and a schedule target has to exist before it can be written.
+    # Without this edge Terraform is free to roll the service first: the repoint then fails
+    # against a missing ARN and the schedules stay on their old targets until something
+    # restarts the service again. Nothing in scheduled_lambdas reads the service, so this
+    # adds no cycle — and it is what makes the whole upgrade a single apply.
+    module.scheduled_lambdas,
   ]
 }
 

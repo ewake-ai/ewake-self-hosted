@@ -5,22 +5,7 @@ resource "aws_cloudwatch_log_group" "knowledge_graph" {
 }
 
 locals {
-  # Only knowledge-graph registers a flag provider, so the other scheduled Lambdas get neither these keys nor the API key.
-  # Agentless because this is the one runtime with neither an agent nor an extension to carry remote config.
-  # Gated on the bool, never on the key: a condition over a sensitive value marks the whole env map sensitive.
-  knowledge_graph_flag_env = var.datadog_enabled ? {
-    DD_FEATURE_FLAGS_ENABLED                                              = "true"
-    DD_FEATURE_FLAGS_CONFIGURATION_SOURCE                                 = "agentless"
-    DD_FEATURE_FLAGS_CONFIGURATION_SOURCE_AGENTLESS_POLL_INTERVAL_SECONDS = "300"
-    DD_API_KEY                                                            = var.datadog_api_key
-    } : {
-    # Stated, not omitted: the tracer defaults to enabled and agentless, so silence buys a 30s stall on every cold start.
-    DD_FEATURE_FLAGS_ENABLED = "false"
-    # With no agent to receive spans, an initialised tracer would export to a port nothing listens on.
-    DD_TRACE_ENABLED = "false"
-  }
-
-  knowledge_graph_env = merge(local.scheduled_lambda_env_common, local.knowledge_graph_flag_env, {
+  knowledge_graph_env = merge(local.scheduled_lambda_env_common, local.flag_env, {
     DD_SERVICE = "knowledge-graph"
     # The only scheduled Lambda that reads GitHub. It is not given the App signing key: it asks
     # reactive for an installation token over the internal API, which needs both of these.

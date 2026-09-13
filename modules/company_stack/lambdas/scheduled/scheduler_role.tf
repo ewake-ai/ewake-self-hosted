@@ -46,7 +46,9 @@ data "aws_iam_policy_document" "scheduler_lambda_invoke" {
       aws_lambda_function.thanos_discovery.arn,
       "${aws_lambda_function.thanos_discovery.arn}:*",
       aws_lambda_function.incident_follow_up.arn,
-      "${aws_lambda_function.incident_follow_up.arn}:*"
+      "${aws_lambda_function.incident_follow_up.arn}:*",
+      aws_lambda_function.scheduled.arn,
+      "${aws_lambda_function.scheduled.arn}:*"
     ]
   }
 }

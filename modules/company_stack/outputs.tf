@@ -9,6 +9,7 @@ output "ecs_service_name" {
 output "lambda_function_names" {
   value = {
     reactive_processor   = module.lambdas.reactive_function_name
+    scheduled            = module.scheduled_lambdas.scheduled_function_name
     datadog_log_analysis = module.scheduled_lambdas.datadog_log_analysis_function_name
     loki_log_analysis    = module.scheduled_lambdas.loki_log_analysis_function_name
     knowledge_graph      = module.scheduled_lambdas.knowledge_graph_function_name

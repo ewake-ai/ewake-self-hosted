@@ -42,4 +42,18 @@ locals {
     }, var.log_clustering_sidecar_url != null ? {
     LOG_CLUSTERING_SIDECAR_URL = var.log_clustering_sidecar_url
   } : {}, var.datadog_base_env, local.langsmith_env)
+
+  # Agentless because this is the one runtime with neither an agent nor an extension to carry remote config.
+  # Gated on the bool, never on the key: a condition over a sensitive value marks the whole env map sensitive.
+  flag_env = var.datadog_enabled ? {
+    DD_FEATURE_FLAGS_ENABLED                                              = "true"
+    DD_FEATURE_FLAGS_CONFIGURATION_SOURCE                                 = "agentless"
+    DD_FEATURE_FLAGS_CONFIGURATION_SOURCE_AGENTLESS_POLL_INTERVAL_SECONDS = "300"
+    DD_API_KEY                                                            = var.datadog_api_key
+    } : {
+    # Stated, not omitted: the tracer defaults to enabled and agentless, so silence buys a 30s stall on every cold start.
+    DD_FEATURE_FLAGS_ENABLED = "false"
+    # With no agent to receive spans, an initialised tracer would export to a port nothing listens on.
+    DD_TRACE_ENABLED = "false"
+  }
 }

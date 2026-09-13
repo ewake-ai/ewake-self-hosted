@@ -1,10 +1,5 @@
 # No static event rule — reactive creates a per-deployment schedule at ingest time.
 
-variable "lambda_queue_url" {
-  description = "URL of the reactive SQS queue. Release-watch publishes RELEASE_WATCH_ALERT messages here for reactive-lambda to pick up."
-  type        = string
-}
-
 resource "aws_cloudwatch_log_group" "release_watch" {
   name              = "/${var.ssm_path}/release-watch"
   retention_in_days = 14

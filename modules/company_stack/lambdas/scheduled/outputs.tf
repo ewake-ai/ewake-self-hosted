@@ -41,3 +41,7 @@ output "clickhouse_discovery_function_name" {
 output "thanos_discovery_function_name" {
   value = aws_lambda_function.thanos_discovery.function_name
 }
+
+output "scheduled_function_name" {
+  value = aws_lambda_function.scheduled.function_name
+}
