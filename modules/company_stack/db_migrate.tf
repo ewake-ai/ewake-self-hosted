@@ -105,13 +105,6 @@ resource "aws_ecs_task_definition" "db_migrate" {
         # Not 1: each chain probes the migrations table on one connection while
         # drizzle opens another for CREATE SCHEMA, so a pool of 1 deadlocks.
         { name = "POSTGRES_POOL_MAX", value = "5" },
-        # This task resolves no URL, but the application requires them at startup in every
-        # runtime. Without them it exits before the first migration chain runs,
-        # which fails the gate in front of every deploy.
-        { name = "PUBLIC_INBOUND_BASE_URL", value = local.public_inbound_base_url },
-        { name = "DASHBOARD_BASE_URL", value = local.company_base_url },
-        { name = "INTERNAL_BASE_URL", value = local.company_base_url },
-        { name = "SSO_BASE_URL", value = local.dex_base_url },
       ]
       secrets = [
         { name = "POSTGRES_HOST", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:host::" },
@@ -120,10 +113,6 @@ resource "aws_ecs_task_definition" "db_migrate" {
         { name = "POSTGRES_USER", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:username::" },
         { name = "POSTGRES_PASSWORD", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:password::" },
         { name = "ADMIN_PASSWORD", valueFrom = "${aws_secretsmanager_secret.app[0].arn}:ADMIN_PASSWORD::" },
-        # This task authenticates nothing, but the application requires both at startup —
-        # the same reason the base URLs are set above.
-        { name = "JWT_SECRET", valueFrom = "${aws_secretsmanager_secret.app[0].arn}:JWT_SECRET::" },
-        { name = "ORCHESTRATOR_SECRET", valueFrom = local.orchestrator_secret_value_from },
       ]
       logConfiguration = {
         logDriver = "awslogs"

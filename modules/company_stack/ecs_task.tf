@@ -102,8 +102,6 @@ resource "aws_ecs_task_definition" "reactive" {
         # to resolve frontend assets and integration secrets, so a wrong value here reads from
         # a path that was never written and that iam.tf does not grant.
         { name = "TENANT", value = var.tenant_name },
-        # Absent, the application falls back to a default hostname it does not serve.
-        { name = "EWAKE_BASE_URL", value = local.company_base_url },
         # Required at config import, and named for who reaches each. Identical behind a public
         # ALB; a private one moves only the first onto its public entry point.
         { name = "PUBLIC_INBOUND_BASE_URL", value = local.public_inbound_base_url },

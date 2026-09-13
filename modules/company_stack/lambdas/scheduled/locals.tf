@@ -38,15 +38,7 @@ locals {
     NEO4J_USERNAME               = var.neo4j_username
     NEO4J_PASSWORD               = var.neo4j_password
     AMBIENT_AGENT_PERIOD_MINUTES = 15
-    # Unread by these functions, but the application requires them at startup in
-    # every runtime.
-    PUBLIC_INBOUND_BASE_URL      = var.public_inbound_base_url
-    DASHBOARD_BASE_URL           = var.company_base_url
-    INTERNAL_BASE_URL            = var.company_base_url
-    SSO_BASE_URL                 = var.sso_base_url
     LOG_CLUSTERING_FUNCTION_NAME = var.log_clustering_function_name
-    JWT_SECRET                   = var.jwt_secret
-    ORCHESTRATOR_SECRET          = var.orchestrator_secret
     }, var.log_clustering_sidecar_url != null ? {
     LOG_CLUSTERING_SIDECAR_URL = var.log_clustering_sidecar_url
   } : {}, var.datadog_base_env, local.langsmith_env)

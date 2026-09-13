@@ -29,8 +29,6 @@ module "lambdas" {
   company                      = var.company
   tenant_name                  = var.tenant_name
   company_base_url             = local.company_base_url
-  public_inbound_base_url      = local.public_inbound_base_url
-  sso_base_url                 = local.dex_base_url
   arn_prefix                   = local.arn_prefix
   ssm_path                     = local.ssm_path
   task_role_arn                = aws_iam_role.task.arn
@@ -77,9 +75,6 @@ module "scheduled_lambdas" {
 
   company                 = var.company
   tenant_name             = var.tenant_name
-  company_base_url        = local.company_base_url
-  public_inbound_base_url = local.public_inbound_base_url
-  sso_base_url            = local.dex_base_url
   arn_prefix              = local.arn_prefix
   ssm_path                = local.ssm_path
   task_role_arn           = aws_iam_role.task.arn
@@ -106,9 +101,5 @@ module "scheduled_lambdas" {
   log_clustering_function_name = var.log_clustering_function_name
   log_clustering_sidecar_url   = local.log_clustering_sidecar_url
   internal_sg_id               = local.log_clustering_sidecar_enabled ? aws_security_group.internal.id : null
-  jwt_secret                   = local.is_byoc ? random_password.jwt_secret[0].result : ""
-  orchestrator_secret = local.is_byoc ? random_password.orchestrator_secret[0].result : (
-    var.orchestrator_internal_token_secret_arn != null ? one(data.aws_secretsmanager_secret_version.orchestrator_internal_token[*].secret_string) : ""
-  )
-  tags = local.tags
+  tags                         = local.tags
 }

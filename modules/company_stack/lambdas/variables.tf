@@ -169,17 +169,7 @@ variable "internal_sg_id" {
 }
 
 variable "company_base_url" {
-  description = "The deployment's own https URL. Not read by these functions, but the application requires the base URLs at startup in every runtime."
-  type        = string
-}
-
-variable "public_inbound_base_url" {
-  description = "Public https base URL third parties reach this deployment on. Same as company_base_url unless a private ALB puts an entry point in front. Not read by these functions; required at config import."
-  type        = string
-}
-
-variable "sso_base_url" {
-  description = "The origin the browser drives the OIDC hops against. Not read by these functions; required at config import."
+  description = "The deployment's own https URL, injected as DASHBOARD_BASE_URL. This function builds integration OAuth callback URLs from it."
   type        = string
 }
 
