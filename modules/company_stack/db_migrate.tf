@@ -53,13 +53,8 @@ data "aws_iam_policy_document" "db_migrate_execution" {
   statement {
     sid     = "CompanyDatabaseSecretRead"
     actions = ["secretsmanager:GetSecretValue"]
-    # Only what the container definition references: the database credential, and the app
-    # secret holding ADMIN_PASSWORD for the seed step. Without the second, the agent cannot
-    # resolve the `secrets` entry and the task never starts — the plan still reads fine.
-    resources = [
-      aws_secretsmanager_secret.company_db.arn,
-      aws_secretsmanager_secret.app[0].arn
-    ]
+    # Only what the container definition resolves.
+    resources = [aws_secretsmanager_secret.company_db.arn]
   }
 }
 
@@ -83,11 +78,9 @@ resource "aws_ecs_task_definition" "db_migrate" {
 
   container_definitions = jsonencode([
     merge(local.is_byoc ? {
-      # The image's own migrate entrypoint rather than an inline chain. It runs the three
-      # migrations in their load-bearing order (mastra's 0000 moves a table the common chain
-      # creates) and then dist/common/db/seed.js, which seeds the company row, the system
-      # user and the ADMIN_PASSWORD hash. Reactive used to seed itself and no longer
-      # does, so spelling the chains out here would silently skip all three.
+      # The image's own migrate entrypoint rather than an inline chain, so the order of the
+      # chains stays reviewed with the migrations rather than with the infrastructure.
+      # Seeding is not part of it — db_seed.tf runs after this task.
       command = ["sh", "src/reactive/docker-migrate.sh"]
       } : {}, {
       name = "db-migrate"
@@ -99,9 +92,6 @@ resource "aws_ecs_task_definition" "db_migrate" {
         { name = "AWS_REGION", value = var.aws_region },
         { name = "CLIENT", value = var.company.name },
         { name = "TENANT", value = var.tenant_name },
-        # The seed step refuses to create a company row without this; reactive supplied it
-        # when it did its own seeding.
-        { name = "COMPANY_DOMAIN", value = var.company.domain },
         # Not 1: each chain probes the migrations table on one connection while
         # drizzle opens another for CREATE SCHEMA, so a pool of 1 deadlocks.
         { name = "POSTGRES_POOL_MAX", value = "5" },
@@ -112,7 +102,6 @@ resource "aws_ecs_task_definition" "db_migrate" {
         { name = "POSTGRES_DB", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:database::" },
         { name = "POSTGRES_USER", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:username::" },
         { name = "POSTGRES_PASSWORD", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:password::" },
-        { name = "ADMIN_PASSWORD", valueFrom = "${aws_secretsmanager_secret.app[0].arn}:ADMIN_PASSWORD::" },
       ]
       logConfiguration = {
         logDriver = "awslogs"

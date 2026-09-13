@@ -272,11 +272,13 @@ resource "aws_ecs_service" "reactive" {
   # `ResourceNotFoundException: no AWSCURRENT staging label`, then the service
   # hangs in wait_for_steady_state forever. Explicit depends_on closes the race.
   #
-  # db_migrate keeps a fresh install from serving an empty schema.
+  # db_migrate keeps a fresh install from serving an empty schema, and seed_company from
+  # serving one with no company row — the dashboard reads it before it starts listening.
   depends_on = [
     aws_secretsmanager_secret_version.company_neo4j,
     aws_secretsmanager_secret_version.company_db,
     terraform_data.db_migrate,
+    aws_lambda_invocation.seed_company,
   ]
 
   # CI owns the image tag — it registers a new task definition revision on each
@@ -344,6 +346,7 @@ resource "terraform_data" "reactive_deploy" {
   depends_on = [
     aws_ecs_service.reactive,
     terraform_data.db_migrate,
+    aws_lambda_invocation.seed_company,
   ]
 }
 

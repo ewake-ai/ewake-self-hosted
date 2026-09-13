@@ -56,9 +56,9 @@ resource "random_password" "orchestrator_secret" {
 
 # The password signed in with where there is no SSO connector. sso_connectors defaults to [],
 # and this repo has no static-password fallback of its own, so without this a connectorless
-# deployment comes up with no login path at all. The seed step in db_migrate.tf hashes it; the
-# plaintext lives only here, for an operator to read out of Secrets Manager. No special
-# characters: it gets pasted into a shell and then a form.
+# deployment comes up with no login path at all. The RDS bootstrap Lambda hashes it onto the
+# system user; the plaintext lives only here, for an operator to read out of Secrets Manager.
+# No special characters: it gets pasted into a shell and then a form.
 resource "random_password" "admin_password" {
   length  = 32
   special = false
