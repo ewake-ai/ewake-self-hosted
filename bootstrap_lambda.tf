@@ -88,8 +88,10 @@ resource "aws_lambda_function" "bootstrap" {
   function_name = "${var.tenant_name}-rds-bootstrap"
   role          = aws_iam_role.bootstrap_lambda.arn
   package_type  = "Image"
-  # CI only publishes this Lambda under :latest, not per release channel.
-  image_uri   = "${local.ewake_ecr_registry}/ewake-lambda-rds-bootstrap:latest"
+  # Pinned to app_image_tag like every other runtime. It matters most here: from
+  # ewake-v0.168.0 this function seeds the company row and the admin user, so a copy
+  # left at an older digest fails the apply that first calls it.
+  image_uri   = "${local.ewake_ecr_registry}/ewake-lambda-rds-bootstrap:${local.app_image_tag}"
   timeout     = 60
   memory_size = 256
 
@@ -102,10 +104,4 @@ resource "aws_lambda_function" "bootstrap" {
     aws_iam_role_policy.bootstrap_lambda,
     aws_cloudwatch_log_group.bootstrap_lambda
   ]
-
-  # CI (Ewake side) re-pushes and the function is updated out of band on that
-  # cadence; terraform only pins the repo, so ignore tag/digest drift.
-  lifecycle {
-    ignore_changes = [image_uri]
-  }
 }

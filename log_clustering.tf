@@ -38,8 +38,9 @@ resource "aws_lambda_function" "log_clustering" {
   description   = "drain3 log clustering for the ${var.tenant_name} deployment"
   role          = aws_iam_role.log_clustering.arn
   package_type  = "Image"
-  # CI only publishes this Lambda under :latest, not per release channel.
-  image_uri   = "${local.ewake_ecr_registry}/ewake-lambda-log-clustering:latest"
+  # Pinned to app_image_tag like every other runtime, so this function moves with the
+  # deployment instead of being frozen at whatever digest it was first created with.
+  image_uri   = "${local.ewake_ecr_registry}/ewake-lambda-log-clustering:${local.app_image_tag}"
   timeout     = 30
   memory_size = 1024
 
@@ -54,8 +55,4 @@ resource "aws_lambda_function" "log_clustering" {
     aws_iam_role_policy.log_clustering,
     aws_cloudwatch_log_group.log_clustering
   ]
-
-  lifecycle {
-    ignore_changes = [image_uri]
-  }
 }
