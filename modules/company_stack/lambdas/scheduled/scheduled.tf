@@ -72,3 +72,22 @@ resource "aws_lambda_function" "scheduled" {
     }
   }
 }
+
+resource "aws_cloudwatch_log_subscription_filter" "scheduled_to_datadog" {
+  count           = var.datadog_enabled ? 1 : 0
+  name            = "${var.arn_prefix}-scheduled-to-datadog"
+  log_group_name  = aws_cloudwatch_log_group.scheduled.name
+  filter_pattern  = ""
+  destination_arn = var.datadog_forwarder_arn
+
+  depends_on = [aws_lambda_permission.allow_cloudwatch_scheduled]
+}
+
+resource "aws_lambda_permission" "allow_cloudwatch_scheduled" {
+  count         = var.datadog_enabled ? 1 : 0
+  statement_id  = "AllowCloudWatchScheduled${substr(sha1(aws_cloudwatch_log_group.scheduled.name), 0, 12)}"
+  action        = "lambda:InvokeFunction"
+  function_name = var.datadog_forwarder_arn
+  principal     = "logs.amazonaws.com"
+  source_arn    = "${aws_cloudwatch_log_group.scheduled.arn}:*"
+}

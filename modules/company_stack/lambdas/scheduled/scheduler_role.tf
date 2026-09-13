@@ -23,30 +23,6 @@ data "aws_iam_policy_document" "scheduler_lambda_invoke" {
   statement {
     actions = ["lambda:InvokeFunction"]
     resources = [
-      aws_lambda_function.datadog_log_analysis.arn,
-      "${aws_lambda_function.datadog_log_analysis.arn}:*",
-      aws_lambda_function.loki_log_analysis.arn,
-      "${aws_lambda_function.loki_log_analysis.arn}:*",
-      aws_lambda_function.knowledge_graph.arn,
-      "${aws_lambda_function.knowledge_graph.arn}:*",
-      aws_lambda_function.incident_indexing.arn,
-      "${aws_lambda_function.incident_indexing.arn}:*",
-      aws_lambda_function.datadog_metric_analysis.arn,
-      "${aws_lambda_function.datadog_metric_analysis.arn}:*",
-      aws_lambda_function.datadog_span_analysis.arn,
-      "${aws_lambda_function.datadog_span_analysis.arn}:*",
-      aws_lambda_function.release_watch.arn,
-      "${aws_lambda_function.release_watch.arn}:*",
-      aws_lambda_function.custom_mcp_discovery.arn,
-      "${aws_lambda_function.custom_mcp_discovery.arn}:*",
-      aws_lambda_function.kubernetes_discovery.arn,
-      "${aws_lambda_function.kubernetes_discovery.arn}:*",
-      aws_lambda_function.clickhouse_discovery.arn,
-      "${aws_lambda_function.clickhouse_discovery.arn}:*",
-      aws_lambda_function.thanos_discovery.arn,
-      "${aws_lambda_function.thanos_discovery.arn}:*",
-      aws_lambda_function.incident_follow_up.arn,
-      "${aws_lambda_function.incident_follow_up.arn}:*",
       aws_lambda_function.scheduled.arn,
       "${aws_lambda_function.scheduled.arn}:*"
     ]
