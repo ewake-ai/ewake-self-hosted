@@ -10,6 +10,72 @@ Always run `terraform plan` first and read it. Anything that destroys or
 replaces RDS, the Neo4j volume or the load balancer needs attention before you
 continue. Contact Ewake if the plan does.
 
+## One-time: the scheduled Lambdas become one function
+
+Applies to any deployment first applied before this release. One apply, no manual
+steps. It needs `app_image_tag = "ewake-v0.176.0"` or later.
+
+The twelve scheduled Lambdas are now one `<tenant_name>-<company.name>-scheduled`
+function; which agent runs is named in the schedule's payload rather than by the
+function it targets. Your schedules were created from the dashboard, so Terraform
+does not own them and does not repoint them — the dashboard service does, when it
+restarts during this apply. It reads each schedule's payload, so it can repoint a
+schedule whether or not the function it used to point at still exists.
+
+```sh
+terraform apply
+```
+
+**Two things to know before you run it.**
+
+The plan destroys twelve functions **and their twelve log groups**. The ambient
+agents' log history goes with them. Export anything you still need first — this is
+the only irreversible part of the upgrade.
+
+Ambient agents may miss one run. Between the old functions being destroyed and the
+dashboard service finishing its restart, a schedule that fires has nowhere to go.
+The agents are cron-driven, so this costs at most a run or two, and the following
+one lands normally.
+
+Afterwards, confirm the schedules moved:
+
+```sh
+aws scheduler get-schedule --group-name "<tenant_name>-<company.name>" \
+  --name lambda-knowledge-graph-default \
+  --query 'Target.Arn' --output text
+```
+
+The ARN must end in `-scheduled`. If it still names a per-agent function, contact
+Ewake with that output.
+
+A schedule whose payload does not name a known agent is left alone, by design.
+Those are hand-made and have to be recreated on the dashboard.
+
+## The bootstrap and log-clustering Lambdas now follow app_image_tag
+
+No action, but expect two extra function updates in the plan.
+
+Both used to track a floating `:latest` tag with the image ignored in their
+lifecycle, which meant neither ever moved: a container image tag resolves to a
+digest once, when the function is created, so an install kept its original copy no
+matter how many releases went by. They are now pinned to `app_image_tag` like every
+other runtime, and the apply updates them.
+
+This is what makes the seeding change below safe. From `ewake-v0.168.0` the company
+row and the `ewake@ewake.ai` user are written by the RDS bootstrap Lambda rather
+than by the migrate task — so a deployment still carrying a pre-v0.168.0 copy of
+that function would have failed the apply that first called it.
+
+## Seeding moved out of the migrate task
+
+No action, but worth knowing why the plan changes. On an existing deployment both
+rows are already there and the invocation is create-only, so nothing re-runs.
+
+The coupling is strict in the other direction: **this repository at this tag cannot
+run an image older than `ewake-v0.168.0`**. The migrate task no longer receives
+`COMPANY_DOMAIN` or `ADMIN_PASSWORD`, which an older image's seed step requires, so
+it would fail before the first migration chain.
+
 ## Changing the hostname
 
 Use two applies. The first adds the new name, the second removes the old one.

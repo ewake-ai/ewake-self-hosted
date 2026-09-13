@@ -108,8 +108,8 @@ resource "aws_apigatewayv2_route" "public_inbound" {
     # Slack: events, and the interactivity callback for buttons and modals.
     "POST /api/v1/slack/events",
     "POST /api/v1/slack/interactive",
-    # Datadog monitors. The token in the path is the credential — see
-    # integration/datadog.ts, which mints one per integration.
+    # Datadog monitors. The token in the path is the credential; the dashboard mints
+    # one per connected integration.
     "POST /api/webhook/datadog/{token}",
     # Slack's own servers fetch this to render the loading icon in a message
     # block, so it is inbound rather than something a browser asks for.
