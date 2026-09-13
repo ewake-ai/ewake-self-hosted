@@ -4,9 +4,6 @@
 locals {
   langsmith_secret = var.langsmith_enabled ? jsondecode(var.langsmith_secret_string) : null
 
-  # Mastra code agent tools running here use GithubService/appAuth.ts.
-  github_app_secret = var.github_app_enabled ? jsondecode(var.github_app_secret_string) : null
-
   reactive_datadog_env = var.datadog_enabled ? merge(var.datadog_base_env, {
     # Agentless because dd-trace force-disables remote config under IS_SERVERLESS, whatever the extension carries.
     DD_FEATURE_FLAGS_ENABLED                                              = "true"
@@ -80,11 +77,6 @@ resource "aws_lambda_function" "reactive_processor" {
         LANGSMITH_ENDPOINT = local.langsmith_secret["ENDPOINT"]
         LANGSMITH_PROJECT  = local.langsmith_secret["PROJECT"]
         LANGSMITH_API_KEY  = local.langsmith_secret["API_KEY"]
-      } : {},
-      var.github_app_enabled ? {
-        GITHUB_CLIENT_ID       = local.github_app_secret["CLIENT_ID"]
-        GITHUB_CLIENT_SECRET   = local.github_app_secret["CLIENT_SECRET"]
-        GITHUB_APP_PRIVATE_KEY = local.github_app_secret["APP_PRIVATE_KEY"]
       } : {},
       var.elasticsearch_enabled ? {
         ELASTICSEARCH_URL     = var.elasticsearch_url

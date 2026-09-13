@@ -161,7 +161,6 @@ resource "aws_ecs_task_definition" "reactive" {
         ] : [],
         var.github_app_secret_arn != null ? [
           { name = "GITHUB_CLIENT_ID", valueFrom = "${var.github_app_secret_arn}:CLIENT_ID::" },
-          { name = "GITHUB_CLIENT_SECRET", valueFrom = "${var.github_app_secret_arn}:CLIENT_SECRET::" },
           { name = "GITHUB_APP_PRIVATE_KEY", valueFrom = "${var.github_app_secret_arn}:APP_PRIVATE_KEY::" },
         ] : [],
         var.notion_secret_arn != null ? [

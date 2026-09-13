@@ -137,17 +137,6 @@ variable "langsmith_enabled" {
   type        = bool
 }
 
-variable "github_app_enabled" {
-  description = "True when the GitHub App secret is provisioned. Same bool-gate-not-secret-gate pattern as langsmith_enabled."
-  type        = bool
-}
-
-variable "github_app_secret_string" {
-  description = "Raw JSON of the GitHub App secret (CLIENT_ID, CLIENT_SECRET, APP_PRIVATE_KEY). Decoded inside the module and injected as env vars. Nullable — read only when github_app_enabled is true."
-  type        = string
-  sensitive   = true
-}
-
 variable "datadog_enabled" {
   description = "Whether the Datadog agent, Lambda extension, and forwarder run."
   type        = bool

@@ -104,17 +104,6 @@ variable "langsmith_enabled" {
   type        = bool
 }
 
-variable "github_app_enabled" {
-  description = "True when the GitHub App secret is provisioned. Same bool-gate-not-secret-gate pattern as langsmith_enabled — only knowledge-graph.tf reads it."
-  type        = bool
-}
-
-variable "github_app_secret_string" {
-  description = "Raw JSON of the GitHub App secret (CLIENT_ID, CLIENT_SECRET, APP_PRIVATE_KEY). Decoded inside knowledge-graph.tf and injected as env vars. Nullable — read only when github_app_enabled is true."
-  type        = string
-  sensitive   = true
-}
-
 variable "datadog_enabled" {
   description = "Whether the Datadog agent, Lambda extension, and forwarder run."
   type        = bool
@@ -128,4 +117,15 @@ variable "datadog_api_key" {
 
 variable "tenant_name" {
   type = string
+}
+
+variable "internal_reactive_base_url" {
+  description = "In-VPC base URL of the reactive task (Cloud Map name, port 3000). Injected as INTERNAL_BASE_URL on knowledge-graph alone, which is the only scheduled Lambda that reads GitHub and so the only one that has to ask reactive for an installation token."
+  type        = string
+}
+
+variable "orchestrator_secret" {
+  description = "Bearer token the knowledge-graph Lambda signs its internal-API calls with, so reactive answers its request for a GitHub installation token. Scoped to that one function rather than the whole scheduled fleet: nothing else calls the internal API."
+  type        = string
+  sensitive   = true
 }

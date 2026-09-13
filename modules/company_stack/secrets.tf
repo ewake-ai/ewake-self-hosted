@@ -23,12 +23,6 @@ data "aws_secretsmanager_secret_version" "langsmith" {
   secret_id = "langsmith"
 }
 
-# Lambda has no `valueFrom` equivalent — reactive + knowledge-graph read GithubService, so their env vars are inlined at plan time.
-data "aws_secretsmanager_secret_version" "github_app" {
-  count     = !local.is_byoc && var.github_app_secret_arn != null ? 1 : 0
-  secret_id = var.github_app_secret_arn
-}
-
 # The knowledge-graph Lambda reads feature flags agentless, and the agentless source wants the key itself rather than the ARN every other consumer takes.
 data "aws_secretsmanager_secret_version" "datadog_api_key" {
   count     = !local.is_byoc && var.datadog_api_key_secret_arn != null ? 1 : 0
