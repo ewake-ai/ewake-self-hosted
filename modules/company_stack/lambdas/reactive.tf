@@ -27,13 +27,22 @@ resource "aws_cloudwatch_log_group" "reactive" {
 }
 
 resource "aws_lambda_function" "reactive_processor" {
-  function_name                  = "${var.arn_prefix}-reactive"
-  description                    = "\"reactive\" for ${var.arn_prefix}"
-  role                           = var.task_role_arn
-  package_type                   = "Image"
-  image_uri                      = var.reactive_image_uri
-  timeout                        = 900
-  memory_size                    = 2048
+  function_name = "${var.arn_prefix}-reactive"
+  description   = "\"reactive\" for ${var.arn_prefix}"
+  role          = var.task_role_arn
+  package_type  = "Image"
+  image_uri     = var.reactive_image_uri
+  timeout       = 900
+  # 2048 was not enough for a real investigation: an alert that fanned out to sub-agents was
+  # killed with Runtime.OutOfMemory 116s in, and the short runs beside it already sat at
+  # ~1325 MB. Its reported 2045 MB is not the demand — it is where AWS stopped it, so the real
+  # figure is unknown and any smaller bump would be a guess at where the next cliff is.
+  #
+  # The maximum, deliberately. This function runs a handful of times a day, memory scales CPU so
+  # the headroom also cuts latency, and the GB-second cost of a ceiling nobody reaches is a
+  # rounding error next to an investigation that dies in front of a customer. A run that does not
+  # clip finally reports what it actually used, which is what to size from later.
+  memory_size                    = 10240
   reserved_concurrent_executions = 8
 
   environment {
