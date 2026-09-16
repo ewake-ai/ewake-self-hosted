@@ -330,15 +330,15 @@ self-hosted deployments yet.
 
 #### GitHub
 
-GitHub works with a fine-grained personal access token pasted into the
-dashboard, and needs nothing from Terraform. That token belongs to a person: it
-expires, it is scoped to what that person can see, and every read shares their
-rate limit.
+Connecting GitHub means creating a GitHub App in your own organisation and
+having the deployment act as it. There is no other route: the dashboard has no
+token form for GitHub, and reads are made with short-lived installation tokens
+that are minted on demand and never stored.
 
-To avoid all three, create a GitHub App in your own organisation and have the
-deployment act as it. Reads then use short-lived installation tokens scoped to
-the installation rather than to a person. This is optional — leave the three
-variables below unset and the token route is unchanged.
+The three variables below are optional only in the sense that a deployment which
+does not read GitHub can leave them unset. Leave them unset and the dashboard
+says there is no App configured, which is accurate — there is nothing to
+connect.
 
 1. In your organisation, open **Settings → Developer settings → GitHub Apps →
    New GitHub App**. Any name will do; the App is yours.
@@ -355,17 +355,33 @@ variables below unset and the token route is unchanged.
 6. Take the **Client ID** from the App's settings page, and the slug from its
    settings URL: `github.com/organizations/<org>/settings/apps/<slug>`.
 
-Set all three in `terraform.tfvars` and apply:
+Set all three in `terraform.tfvars` and apply. A `.tfvars` file takes literal
+values only — `file()` and every other function is rejected there with
+`Error: Function calls not allowed` — so paste the PEM in as a heredoc:
 
 ```hcl
-github_app_client_id   = "Iv23li..."
-github_app_slug        = "yourcompany-ewake"
-github_app_private_key = file("yourcompany-ewake.private-key.pem")
+github_app_client_id = "Iv23li..."
+github_app_slug      = "yourcompany-ewake"
+
+github_app_private_key = <<-EOT
+-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEA...
+-----END RSA PRIVATE KEY-----
+EOT
 ```
 
-Terraform writes them to `ewake/<tenant>/<company>/github-app` in your account
-and injects them into the dashboard task. The private key also reaches Terraform
-state, so the backend holding that state wants encryption and restricted reads.
+To keep the key in its own file instead, pass it through the environment, where
+`cat` is available:
+
+```sh
+export TF_VAR_github_app_private_key="$(cat yourcompany-ewake.private-key.pem)"
+terraform apply
+```
+
+Terraform writes the three to `ewake/<tenant>/<company>/github-app` in your
+account and injects them into the dashboard task. The private key also reaches
+Terraform state, so the backend holding that state wants encryption and
+restricted reads.
 
 Setting only one or two of the three fails the plan rather than half-enabling
 the feature. Requires `app_image_tag` at `ewake-v0.182.0` or later — set them on

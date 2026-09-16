@@ -9,3 +9,7 @@ errored.tfstate
 # Your own values. terraform.tfvars.example is the template; your real file stays local.
 *.auto.tfvars
 terraform.tfvars
+
+# Private keys. The GitHub App's key is downloaded once and often lands here.
+*.pem
+*.key
