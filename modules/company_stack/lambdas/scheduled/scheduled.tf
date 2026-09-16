@@ -1,9 +1,8 @@
 # Every scheduled Lambda as one function. Its handler reads `lambda` from the schedule payload
-# and loads that folder's bundle, so the twelve differ only by what the schedule sends.
+# and loads that folder's bundle, so they differ only by what the schedule sends.
 #
-# Added beside the per-agent functions rather than replacing them: the dashboard service
-# repoints the existing schedules onto this ARN when it restarts, and it can only do that
-# while both exist. See UPGRADING.md.
+# The schedules themselves are not terraform's: they are created from the dashboard, which is
+# also what points them at this function. See UPGRADING.md for the one-time move onto it.
 
 resource "aws_cloudwatch_log_group" "scheduled" {
   name              = "/${var.ssm_path}/scheduled"
@@ -18,7 +17,7 @@ locals {
     DD_SERVICE       = "scheduled"
     LAMBDA_QUEUE_URL = var.lambda_queue_url
     # knowledge-graph alone reads GitHub, and asks reactive for an installation token rather than
-    # holding the App signing key. It shares this function, so the pair reaches all twelve.
+    # holding the App signing key. It shares this function, so the pair reaches every handler.
     INTERNAL_BASE_URL   = var.internal_reactive_base_url
     ORCHESTRATOR_SECRET = var.orchestrator_secret
   })
@@ -31,7 +30,7 @@ resource "aws_lambda_function" "scheduled" {
   package_type  = "Image"
   image_uri     = var.lambda_bundle_image_uri
 
-  # The ceiling of the twelve it serves: knowledge-graph and the log surveys need the full 900s,
+  # The ceiling of everything it serves: knowledge-graph and the log surveys need the full 900s,
   # and datadog/loki-log-analysis need 2048MB.
   timeout     = 900
   memory_size = 2048

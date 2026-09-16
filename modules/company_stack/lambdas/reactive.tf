@@ -33,19 +33,13 @@ resource "aws_lambda_function" "reactive_processor" {
   package_type  = "Image"
   image_uri     = var.reactive_image_uri
   timeout       = 900
-  # 2048 was not enough for a real investigation: an alert that fanned out to sub-agents was
-  # killed with Runtime.OutOfMemory 116s in, and the short runs beside it already sat at
-  # ~1325 MB. Its reported 2045 MB is not the demand — it is where AWS stopped it, so the real
-  # figure is unknown and any smaller bump would be a guess at where the next cliff is.
+  # Sized at the AWS maximum by default. An investigation runs the agent loop and can fan out to
+  # sub-agents, whose peak demand is not knowable in advance; memory also scales CPU here, so the
+  # headroom shortens the run as well as protecting it. The function runs a handful of times a
+  # day, so the cost of a ceiling that is rarely reached is small.
   #
-  # The maximum, deliberately. This function runs a handful of times a day, memory scales CPU so
-  # the headroom also cuts latency, and the GB-second cost of a ceiling nobody reaches is a
-  # rounding error next to an investigation that dies in front of a customer. A run that does not
-  # clip finally reports what it actually used, which is what to size from later.
-  #
-  # A variable rather than that number outright, because a new AWS account caps Lambda memory at
-  # 3008 MB until the quota is raised, and an apply against one fails with a ValidationException
-  # naming the ceiling. See README, "Lambda memory quota".
+  # A variable rather than a fixed number: a new AWS account caps Lambda memory at 3008 MB until
+  # the quota is raised. See README, "Lambda memory quota".
   memory_size                    = var.reactive_lambda_memory_mb
   reserved_concurrent_executions = 8
 
@@ -79,8 +73,8 @@ resource "aws_lambda_function" "reactive_processor" {
         LOG_CLUSTERING_FUNCTION_NAME = var.log_clustering_function_name
         JWT_SECRET                   = var.jwt_secret
       },
-      # Empty only before shared/ has been applied, and the server gates the
-      # internal API on it either way — so an empty string would fail closed at the first result post.
+      # The server gates its internal API on this either way, so an empty string would fail
+      # closed at the first result post rather than leaving the API open.
       var.orchestrator_secret != "" ? {
         ORCHESTRATOR_SECRET = var.orchestrator_secret
       } : {},

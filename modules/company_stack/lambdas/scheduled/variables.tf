@@ -77,7 +77,7 @@ variable "langsmith_secret_string" {
 }
 
 variable "lambda_bundle_image_uri" {
-  description = "Consolidated image holding all nine scheduled handlers; each function selects its own via image_config."
+  description = "Consolidated image holding every scheduled handler; the schedule payload names which one runs."
   type        = string
 }
 

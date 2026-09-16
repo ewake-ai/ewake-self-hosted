@@ -40,9 +40,9 @@ owner must accept the Marketplace agreement for each one, because that accepts
 the vendor's licence terms for your account. Enable all of them.
 
 **Lambda memory quota.** A new AWS account caps Lambda memory at 3008 MB. The
-Lambda that runs investigations is sized at the 10240 MB maximum, deliberately:
-2048 was not enough, and one that fans out to sub-agents has been killed
-mid-investigation. On a capped account the apply fails with
+Lambda that runs investigations is sized at the 10240 MB maximum, because an
+investigation can fan out to sub-agents and its peak demand is not knowable in
+advance. On a capped account the apply fails with
 
 ```
 ValidationException: 'MemorySize' value failed to satisfy constraint:
@@ -325,8 +325,12 @@ are configured from the dashboard. See [docs.ewake.ai](https://docs.ewake.ai/).
 
 Credentials are stored in Secrets Manager in your account.
 
-GitHub SSO, Microsoft SSO, Google SSO and Notion are not available in
-self-hosted deployments yet.
+Notion connects with a workspace access token pasted into the dashboard, the
+same as the tools above.
+
+GitHub SSO, Microsoft SSO and Google SSO are not available as *integrations* in
+self-hosted deployments yet. They are unrelated to signing in, which uses your
+own OIDC provider — see Prerequisites.
 
 #### GitHub
 

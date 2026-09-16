@@ -299,7 +299,7 @@ locals {
   }
 
   # Container-image Lambdas company_stack consumes via var.lambda_image_uris.
-  # Only reactive is left: the nine scheduled Lambdas are folded
+  # Only reactive is left: the scheduled Lambdas are folded
   # into the single ewake-lambdas bundle below and deleted their per-Lambda
   # ECR repos, so pinning them here would resolve to tags CI no longer moves.
   # rds-bootstrap and log-clustering are NOT here — they are pinned to :latest
@@ -311,7 +311,7 @@ locals {
     for name in local.lambda_names : name => "${local.ewake_ecr_registry}/ewake-lambda-${name}:${local.app_image_tag}"
   }
 
-  # The nine scheduled Lambdas all run from this one image, each picking its
+  # The scheduled Lambdas all run from this one image, each picking its
   # handler via image_config. Pinned to app_image_tag for the same reason the
   # server is: a channel tag moves in ECR under a running deployment, and
   # nothing here would migrate the database to match it. Lambda resolves a tag
@@ -340,7 +340,7 @@ variable "public_inbound_gateway" {
 }
 
 variable "reactive_lambda_memory_mb" {
-  description = "Memory in MB for the reactive Lambda, which runs the investigations. 10240 is the AWS maximum and the default, because an investigation that fans out to sub-agents has been killed at 2048. Lower it only if your account's Lambda memory quota has not been raised above the 3008 MB a new account starts with — see README, \"Lambda memory quota\"."
+  description = "Memory in MB for the reactive Lambda, which runs the investigations. The default is 10240, the AWS maximum: an investigation can fan out to sub-agents and its peak demand is not knowable in advance. Lower it only if your account's Lambda memory quota has not been raised above the 3008 MB a new account starts with — see README, \"Lambda memory quota\"."
   type        = number
   default     = 10240
 
