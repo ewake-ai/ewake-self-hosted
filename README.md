@@ -112,7 +112,7 @@ company = {
   sso_connectors = ["google"]
 }
 
-app_image_tag  = "ewake-v0.164.0"
+app_image_tag  = "ewake-v0.182.0"
 root_domain    = "ewake.example.com"
 hosted_zone_id = "Z0123456789ABCDEFGHIJ"
 azs            = ["eu-west-3a", "eu-west-3b"]
@@ -125,6 +125,10 @@ with a letter. Maximum 21 and 33 characters.
 `stable` is rejected: only an apply from this repository migrates the database,
 and the application refuses to serve an older schema. Each release of this
 repository states the minimum version it needs.
+
+Name a recent build rather than copying the line above unchanged. Ewake keeps a
+limited number of them, so a version eventually stops being pullable and an
+apply pinned to it fails — the release notes list what is current.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
@@ -334,7 +338,8 @@ and injects them into the dashboard task. The private key also reaches Terraform
 state, so the backend holding that state wants encryption and restricted reads.
 
 Setting only one or two of the three fails the plan rather than half-enabling
-the feature. Requires `app_image_tag` at `ewake-vX.Y.Z` or later.
+the feature. Requires `app_image_tag` at `ewake-v0.182.0` or later — set them on
+an older build and Terraform writes the secret, but the dashboard ignores it.
 
 After the apply, the GitHub card in the dashboard gains an **Install** action.
 It sends you to GitHub to install the App, and GitHub sends you back. Install it
