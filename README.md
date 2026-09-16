@@ -344,22 +344,41 @@ organisation and refuses a personal installation.
 #### CloudWatch
 
 Reading CloudWatch logs and metrics needs a sidecar container. It is off by
-default because it runs permanently alongside the dashboard. Turn it on:
-
-```hcl
-company = {
-  # ...
-  features = {
-    cloudwatchMcpSidecar = true
-  }
-}
-```
+default because it runs permanently alongside the dashboard.
 
 The sidecar does not read CloudWatch with the task's own permissions. It asks
 the dashboard which roles to assume, and the dashboard answers with the
-CloudWatch integrations you have connected. So after the apply, connect one in
-the dashboard: a role ARN, an external ID, and a region. Until you do, the
-sidecar runs and reads nothing — that is the expected state, not a fault.
+CloudWatch integrations you have connected.
+
+**Connect the integration first, then turn the sidecar on.** In that order:
+
+1. Create the role described below.
+2. In the dashboard, go to **Integrations → CloudWatch** and connect it with the
+   role ARN, your external ID, and the region.
+3. Then set the flag and apply:
+
+   ```hcl
+   company = {
+     # ...
+     features = {
+       cloudwatchMcpSidecar = true
+     }
+   }
+   ```
+
+<!-- prettier-ignore -->
+> **The order matters.** The sidecar asks the dashboard for its configuration on
+> startup, and gives up if the answer is that no integration exists. Started
+> first, it retries a few times and then stays down — and connecting an
+> integration afterwards does not bring it back. Nothing else breaks if you get
+> this wrong: the container is not essential, so the dashboard is unaffected.
+> Connect the integration, then force a new deployment of the reactive service:
+>
+> ```sh
+> aws ecs update-service \
+>   --cluster <tenant_name> --service <company.name> \
+>   --force-new-deployment
+> ```
 
 The role is yours to create, in whichever account holds the logs you want read.
 Two requirements:

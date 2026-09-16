@@ -1,8 +1,12 @@
 locals {
   # An opt-in, off by default: the sidecar is a permanent container in the dashboard task, and not
-  # every deployment reads CloudWatch. Turn it on with company.features.cloudwatchMcpSidecar, then
-  # connect a CloudWatch integration in the dashboard — the sidecar assumes the role that
-  # integration names, so it reads nothing until one exists. See README.md.
+  # every deployment reads CloudWatch.
+  #
+  # Connect a CloudWatch integration in the dashboard *before* setting this, not after. The sidecar
+  # asks the dashboard for the roles to assume when it starts, and gives up if the answer is that
+  # none exist — so one started first retries a few times and then stays down, and connecting an
+  # integration later does not bring it back. Nothing else is affected, since the container is
+  # non-essential; the recovery is a forced new deployment of the service. See README.md.
   cloudwatch_mcp_enabled = var.company.features.cloudwatchMcpSidecar
 
   cloudwatch_mcp_url = local.cloudwatch_mcp_enabled ? "http://${local.task_host}:8931/mcp" : null

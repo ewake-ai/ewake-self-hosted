@@ -23,9 +23,10 @@ company = {
   # Optional sidecars, both off by default. Each one is a permanent container in
   # the dashboard task, so turn on only what this deployment reads.
   #
-  # cloudwatchMcpSidecar lets the agent read CloudWatch logs and metrics. It needs
-  # a CloudWatch integration connected in the dashboard, naming a role it assumes;
-  # until one exists it runs and reads nothing. See README → "CloudWatch".
+  # cloudwatchMcpSidecar lets the agent read CloudWatch logs and metrics. Connect
+  # the CloudWatch integration in the dashboard *before* setting this — a sidecar
+  # started with none connected stays down until the service is redeployed. See
+  # README → "CloudWatch".
   # features = {
   #   cloudwatchMcpSidecar = true
   # }

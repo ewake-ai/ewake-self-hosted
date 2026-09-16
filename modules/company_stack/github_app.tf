@@ -84,6 +84,13 @@ resource "aws_secretsmanager_secret" "github_app" {
   name        = "${local.ssm_path}/github-app"
   description = "Credentials of the GitHub App this deployment acts as (CLIENT_ID, APP_SLUG, APP_PRIVATE_KEY). Written from terraform variables; ecs_task.tf injects the three into the dashboard task."
   tags        = local.tags
+
+  # No recovery window, because the three variables are something you can unset. AWS's 30-day
+  # default would only schedule the deletion and keep the name reserved for those 30 days, so
+  # turning the App off and back on a week later would fail the apply with "already scheduled for
+  # deletion" and no way forward but the CLI. Nothing is lost by deleting it outright: terraform is
+  # the only writer and rewrites every key from your variables on the next apply.
+  recovery_window_in_days = 0
 }
 
 # No ignore_changes: terraform is the only writer here, so suppressing updates would mean a
