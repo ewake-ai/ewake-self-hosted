@@ -159,9 +159,16 @@ resource "aws_ecs_task_definition" "reactive" {
         local.orchestrator_secret_value_from != null ? [
           { name = "ORCHESTRATOR_SECRET", valueFrom = local.orchestrator_secret_value_from },
         ] : [],
-        var.github_app_secret_arn != null ? [
-          { name = "GITHUB_CLIENT_ID", valueFrom = "${var.github_app_secret_arn}:CLIENT_ID::" },
-          { name = "GITHUB_APP_PRIVATE_KEY", valueFrom = "${var.github_app_secret_arn}:APP_PRIVATE_KEY::" },
+        # Absent when no App is configured: the application then reads all three as empty, drops
+        # the install action, and offers GitHub with the token form alone.
+        local.github_app_enabled ? [
+          { name = "GITHUB_CLIENT_ID", valueFrom = "${one(aws_secretsmanager_secret.github_app[*].arn)}:CLIENT_ID::" },
+          # The only runtime given the signing key. Every other one asks this task for an
+          # installation token over the internal API rather than carrying it.
+          { name = "GITHUB_APP_PRIVATE_KEY", valueFrom = "${one(aws_secretsmanager_secret.github_app[*].arn)}:APP_PRIVATE_KEY::" },
+          # The <slug> in github.com/apps/<slug>, which is the only way to address an App in an
+          # install URL. Read from the secret rather than assumed, since it is yours.
+          { name = "GITHUB_APP_SLUG", valueFrom = "${one(aws_secretsmanager_secret.github_app[*].arn)}:APP_SLUG::" },
         ] : [],
         var.notion_secret_arn != null ? [
           { name = "NOTION_CLIENT_ID", valueFrom = "${var.notion_secret_arn}:CLIENT_ID::" },
@@ -212,11 +219,12 @@ resource "aws_ecs_task_definition" "reactive" {
 
   tags = local.tags
 
-  # Precondition (not `check`) so a missing token ARN fails at plan; the sidecar's EWAKE_INTERNAL_TOKEN sources from orchestrator_internal_token_secret_arn.
+  # Precondition (not `check`) so a missing token fails at plan rather than as a sidecar that boots
+  # and is refused on every call. It resolves from the `app` secret here, so this does not fire.
   lifecycle {
     precondition {
-      condition     = !(var.company.features.cloudwatchMcpSidecar && var.orchestrator_internal_token_secret_arn == null)
-      error_message = "features.cloudwatchMcpSidecar cannot be true without orchestrator_internal_token_secret_arn: the sidecar's EWAKE_INTERNAL_TOKEN sources from that secret."
+      condition     = !(var.company.features.cloudwatchMcpSidecar && local.orchestrator_secret_value_from == null)
+      error_message = "features.cloudwatchMcpSidecar cannot be true without a resolvable internal-API secret: the sidecar's EWAKE_INTERNAL_TOKEN sources from it, and the dashboard checks its own copy against what the sidecar sends."
     }
 
     # Agentless resolves its endpoint from DD_SITE and authenticates with DD_API_KEY, and a missing or
@@ -277,6 +285,9 @@ resource "aws_ecs_service" "reactive" {
   depends_on = [
     aws_secretsmanager_secret_version.company_neo4j,
     aws_secretsmanager_secret_version.company_db,
+    # Same race, same fix: the three GITHUB_* values are referenced through the secret's ARN, and
+    # on a first apply the version behind it is written in the same graph. Empty when no App is set.
+    aws_secretsmanager_secret_version.github_app,
     terraform_data.db_migrate,
     aws_lambda_invocation.seed_company,
   ]

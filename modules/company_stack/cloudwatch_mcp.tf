@@ -1,5 +1,9 @@
 locals {
-  cloudwatch_mcp_enabled = var.company.features.cloudwatchMcpSidecar && !local.is_byoc
+  # An opt-in, off by default: the sidecar is a permanent container in the dashboard task, and not
+  # every deployment reads CloudWatch. Turn it on with company.features.cloudwatchMcpSidecar, then
+  # connect a CloudWatch integration in the dashboard — the sidecar assumes the role that
+  # integration names, so it reads nothing until one exists. See README.md.
+  cloudwatch_mcp_enabled = var.company.features.cloudwatchMcpSidecar
 
   cloudwatch_mcp_url = local.cloudwatch_mcp_enabled ? "http://${local.task_host}:8931/mcp" : null
 
@@ -13,8 +17,10 @@ locals {
     }
     portMappings = [{ containerPort = 8931, protocol = "tcp" }]
     environment  = [{ name = "REACTIVE_CONFIG_URL", value = "http://localhost:3000/internal/cloudwatch-mcp-config" }]
+    # The same value the dashboard container gets as ORCHESTRATOR_SECRET, which is what it checks
+    # this against: the sidecar polls the dashboard's own internal API for the roles to assume.
     secrets = [
-      { name = "EWAKE_INTERNAL_TOKEN", valueFrom = var.orchestrator_internal_token_secret_arn }
+      { name = "EWAKE_INTERNAL_TOKEN", valueFrom = local.orchestrator_secret_value_from }
     ]
     dependsOn = [{ containerName = "reactive", condition = "START" }]
     logConfiguration = {

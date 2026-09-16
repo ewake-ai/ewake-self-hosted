@@ -94,7 +94,11 @@ module "scheduled_lambdas" {
   lambda_queue_url             = aws_sqs_queue.lambda.url
   log_clustering_function_name = var.log_clustering_function_name
   log_clustering_sidecar_url   = local.log_clustering_sidecar_url
-  internal_sg_id               = local.log_clustering_sidecar_enabled ? aws_security_group.internal.id : null
+  cloudwatch_mcp_url           = local.cloudwatch_mcp_url
+  # Reaches the log-clustering sidecar on 8000 and the CloudWatch MCP one on 8931 through the same
+  # SG, whose rules log_clustering_sidecar.tf and cloudwatch_mcp.tf self-reference; either sidecar
+  # needs the Lambdas inside it.
+  internal_sg_id = (local.log_clustering_sidecar_enabled || local.cloudwatch_mcp_enabled) ? aws_security_group.internal.id : null
   # knowledge-graph alone: it asks reactive for a GitHub installation token over the internal API.
   internal_reactive_base_url = local.internal_reactive_base_url
   orchestrator_secret = local.is_byoc ? random_password.orchestrator_secret[0].result : (

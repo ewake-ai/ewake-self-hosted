@@ -10,6 +10,16 @@ Always run `terraform plan` first and read it. Anything that destroys or
 replaces RDS, the Neo4j volume or the load balancer needs attention before you
 continue. Contact Ewake if the plan does.
 
+## Nothing to do: the GitHub App and the CloudWatch sidecar
+
+Both are new opt-in features, and both stay off unless you turn them on. An
+existing deployment plans and applies with no change, and neither adds a
+required variable. README → "Connect integrations" covers what each one does.
+
+One variable was removed rather than renamed: `github_app_secret_arn`. It was
+always null here, so no `terraform.tfvars` should name it. If yours does, delete
+the line before applying — Terraform refuses an undeclared variable.
+
 ## One-time: the scheduled Lambdas become one function
 
 Applies to any deployment first applied before this release. One apply, no manual

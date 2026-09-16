@@ -94,8 +94,13 @@ variable "log_clustering_sidecar_url" {
   type        = string
 }
 
+variable "cloudwatch_mcp_url" {
+  description = "Base URL of the CloudWatch MCP sidecar, or null when the feature is off. The CloudWatch survey reads it, and treats an unset URL as no connected region — so without this the survey skips every run."
+  type        = string
+}
+
 variable "internal_sg_id" {
-  description = "Security group reaching the log-clustering sidecar on 8000, or null when the feature is off."
+  description = "Security group reaching the log-clustering sidecar on 8000 and the CloudWatch MCP sidecar on 8931, or null when neither feature is on. Either sidecar needs the Lambdas inside it."
   type        = string
 }
 

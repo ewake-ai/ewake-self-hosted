@@ -36,6 +36,9 @@ module "company" {
   datadog_forwarder_arn          = null
   datadog_api_key_secret_arn     = null
   datadog_pg_secret_arn          = null
+  github_app_client_id           = var.github_app_client_id
+  github_app_slug                = var.github_app_slug
+  github_app_private_key         = var.github_app_private_key
   ecr_repository_urls            = local.ecr_repository_urls
   reactive_service_image_uri     = "${local.ecr_repository_urls["reactive"]}:${local.app_image_tag}"
   # The service image, not ewake-db-migrate: one build serves and migrates, so app_image_tag

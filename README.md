@@ -291,8 +291,89 @@ are configured from the dashboard. See [docs.ewake.ai](https://docs.ewake.ai/).
 
 Credentials are stored in Secrets Manager in your account.
 
-GitHub App, GitHub SSO, Microsoft SSO, Google SSO and Notion are not available
-in self-hosted deployments yet.
+GitHub SSO, Microsoft SSO, Google SSO and Notion are not available in
+self-hosted deployments yet.
+
+#### GitHub
+
+GitHub works with a fine-grained personal access token pasted into the
+dashboard, and needs nothing from Terraform. That token belongs to a person: it
+expires, it is scoped to what that person can see, and every read shares their
+rate limit.
+
+To avoid all three, create a GitHub App in your own organisation and have the
+deployment act as it. Reads then use short-lived installation tokens scoped to
+the installation rather than to a person. This is optional — leave the three
+variables below unset and the token route is unchanged.
+
+1. In your organisation, open **Settings → Developer settings → GitHub Apps →
+   New GitHub App**. Any name will do; the App is yours.
+2. Under **Webhook**, clear **Active**. The integration reads GitHub and
+   receives nothing from it, so it needs no webhook URL and no inbound path into
+   your network.
+3. Grant these **read-only** repository permissions: Metadata, Contents, Pull
+   requests, Issues, Actions, Deployments. Under organisation permissions, grant
+   **Members: Read-only**.
+4. Under **Where can this GitHub App be installed?**, choose **Only on this
+   account**.
+5. Create the App, then **Generate a private key**. GitHub downloads a `.pem`
+   file once and keeps no copy.
+6. Take the **Client ID** from the App's settings page, and the slug from its
+   settings URL: `github.com/organizations/<org>/settings/apps/<slug>`.
+
+Set all three in `terraform.tfvars` and apply:
+
+```hcl
+github_app_client_id   = "Iv23li..."
+github_app_slug        = "yourcompany-ewake"
+github_app_private_key = file("yourcompany-ewake.private-key.pem")
+```
+
+Terraform writes them to `ewake/<tenant>/<company>/github-app` in your account
+and injects them into the dashboard task. The private key also reaches Terraform
+state, so the backend holding that state wants encryption and restricted reads.
+
+Setting only one or two of the three fails the plan rather than half-enabling
+the feature. Requires `app_image_tag` at `ewake-vX.Y.Z` or later.
+
+After the apply, the GitHub card in the dashboard gains an **Install** action.
+It sends you to GitHub to install the App, and GitHub sends you back. Install it
+on the organisation, not on your user account: the deployment reads an
+organisation and refuses a personal installation.
+
+#### CloudWatch
+
+Reading CloudWatch logs and metrics needs a sidecar container. It is off by
+default because it runs permanently alongside the dashboard. Turn it on:
+
+```hcl
+company = {
+  # ...
+  features = {
+    cloudwatchMcpSidecar = true
+  }
+}
+```
+
+The sidecar does not read CloudWatch with the task's own permissions. It asks
+the dashboard which roles to assume, and the dashboard answers with the
+CloudWatch integrations you have connected. So after the apply, connect one in
+the dashboard: a role ARN, an external ID, and a region. Until you do, the
+sidecar runs and reads nothing — that is the expected state, not a fault.
+
+The role is yours to create, in whichever account holds the logs you want read.
+Two requirements:
+
+- **Its name must start with `EwakeCloudWatchReadOnly`.** The task role is
+  allowed to assume that prefix and nothing else.
+- **Its trust policy must allow the deployment's task role**, which is
+  `arn:aws:iam::<account>:role/<tenant_name>-<company.name>-task`, with a
+  `sts:ExternalId` condition matching the external ID you enter in the
+  dashboard. Generate that value yourself; it is a shared secret, not an
+  identifier.
+
+`CloudWatchReadOnlyAccess` and `CloudWatchLogsReadOnlyAccess` are enough to
+attach to it.
 
 ### Schedule the ambient agents
 

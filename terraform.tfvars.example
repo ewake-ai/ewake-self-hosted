@@ -19,13 +19,26 @@ company = {
   # ADMIN_PASSWORD for you to read out of Secrets Manager. Dex is not mounted at
   # all in that case. Adding a connector later switches login over.
   sso_connectors = ["google"]
+
+  # Optional sidecars, both off by default. Each one is a permanent container in
+  # the dashboard task, so turn on only what this deployment reads.
+  #
+  # cloudwatchMcpSidecar lets the agent read CloudWatch logs and metrics. It needs
+  # a CloudWatch integration connected in the dashboard, naming a role it assumes;
+  # until one exists it runs and reads nothing. See README → "CloudWatch".
+  # features = {
+  #   cloudwatchMcpSidecar = true
+  # }
 }
 
 # The build this deployment runs. Required, and a channel name ("stable",
 # "latest") is refused: nothing migrates this database except an apply from this
 # repo, and the image refuses to serve a schema behind it, so a tag that moves
 # under you turns the next task replacement into an outage. Bump this to upgrade.
-app_image_tag = "ewake-v0.164.0"
+#
+# This is the floor for the current repository tag, not the newest build. Check
+# the release notes for the version you want and set it here.
+app_image_tag = "ewake-v0.176.0"
 
 root_domain    = "ewake.yourcompany.com"
 hosted_zone_id = "Z0123456789ABCDEFGHIJ"

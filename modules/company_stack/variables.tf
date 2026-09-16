@@ -166,12 +166,8 @@ variable "datadog_api_key_secret_arn" {
   nullable = true
 }
 
-variable "github_app_secret_arn" {
-  description = "Secrets Manager ARN of GitHub App credentials (JSON with CLIENT_ID, CLIENT_SECRET, APP_PRIVATE_KEY). Null for this deployment."
-  type        = string
-  default     = null
-  nullable    = true
-}
+# The GitHub App is three variables in github_app.tf, which writes its own secret from them,
+# rather than an ARN of a secret written elsewhere.
 
 variable "notion_secret_arn" {
   description = "Secrets Manager ARN of Notion OAuth credentials (JSON object with CLIENT_ID + CLIENT_SECRET). Null for this deployment."
@@ -311,7 +307,6 @@ locals {
     var.datadog_api_key_secret_arn,
     var.datadog_pg_secret_arn,
     var.orchestrator_internal_token_secret_arn,
-    var.github_app_secret_arn,
     var.notion_secret_arn,
     var.jwt_secret_arn,
     var.slack_secret_arn,

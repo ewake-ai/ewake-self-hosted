@@ -183,6 +183,32 @@ variable "app_image_tag" {
   }
 }
 
+# Optional. Leave all three unset to connect GitHub with a personal access token instead.
+# Set all three to have the deployment act as a GitHub App you own — see README → "GitHub".
+# modules/company_stack/github_app.tf validates them and writes the secret the task reads.
+
+variable "github_app_client_id" {
+  description = "Client ID of a GitHub App you created in your own organisation. Optional; see README."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "github_app_slug" {
+  description = "Slug of that App — the <slug> in github.com/apps/<slug>, read off the App's settings URL."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "github_app_private_key" {
+  description = "PEM contents of a private key generated on that App's settings page. Reaches terraform state, so the backend holding it wants encryption and restricted reads."
+  type        = string
+  default     = null
+  sensitive   = true
+  nullable    = true
+}
+
 variable "azs" {
   description = "Availability zones to use, two or more, all in aws_region."
   type        = list(string)
