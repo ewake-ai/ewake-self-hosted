@@ -58,9 +58,11 @@ resource "aws_lambda_function" "scheduled" {
 
   tags = merge(local.scheduled_tags, { Service = "scheduled" })
 
+  # No ignore_changes on image_uri. Terraform is the only thing that deploys here, so suppressing
+  # it would pin this function to whatever image it was created with: app_image_tag would move the
+  # dashboard and every other Lambda forward and leave the ambient agents behind, on an older build,
+  # against a schema the migration had already changed. The sibling reactive Lambda is the same.
   lifecycle {
-    ignore_changes = [image_uri]
-
     # Agentless resolves its endpoint from DD_SITE and authenticates with DD_API_KEY, and a wrong or
     # missing one fails terminally and silently: 401/403 is never retried and nothing is logged.
     precondition {
