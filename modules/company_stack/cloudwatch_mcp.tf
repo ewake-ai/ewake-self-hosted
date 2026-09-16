@@ -4,8 +4,8 @@ locals {
   #
   # Connect a CloudWatch integration in the dashboard *before* setting this, not after. The sidecar
   # asks the dashboard for the roles to assume when it starts, and gives up if the answer is that
-  # none exist — so one started first retries a few times and then stays down, and connecting an
-  # integration later does not bring it back. Nothing else is affected, since the container is
+  # none exist — so one started first stops within a second and is not restarted, and connecting
+  # an integration later does not bring it back. Nothing else is affected, since the container is
   # non-essential; the recovery is a forced new deployment of the service. See README.md.
   cloudwatch_mcp_enabled = var.company.features.cloudwatchMcpSidecar
 

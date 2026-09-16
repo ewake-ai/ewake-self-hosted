@@ -369,7 +369,7 @@ CloudWatch integrations you have connected.
 <!-- prettier-ignore -->
 > **The order matters.** The sidecar asks the dashboard for its configuration on
 > startup, and gives up if the answer is that no integration exists. Started
-> first, it retries a few times and then stays down — and connecting an
+> first, it stops within a second and is not restarted — and connecting an
 > integration afterwards does not bring it back. Nothing else breaks if you get
 > this wrong: the container is not essential, so the dashboard is unaffected.
 > Connect the integration, then force a new deployment of the reactive service:
