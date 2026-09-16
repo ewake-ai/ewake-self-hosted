@@ -338,3 +338,14 @@ variable "public_inbound_gateway" {
   type        = bool
   default     = false
 }
+
+variable "reactive_lambda_memory_mb" {
+  description = "Memory in MB for the reactive Lambda, which runs the investigations. 10240 is the AWS maximum and the default, because an investigation that fans out to sub-agents has been killed at 2048. Lower it only if your account's Lambda memory quota has not been raised above the 3008 MB a new account starts with — see README, \"Lambda memory quota\"."
+  type        = number
+  default     = 10240
+
+  validation {
+    condition     = var.reactive_lambda_memory_mb >= 2048 && var.reactive_lambda_memory_mb <= 10240
+    error_message = "reactive_lambda_memory_mb must be between 2048 and 10240. Below 2048 the reactive Lambda has been seen to run out of memory mid-investigation."
+  }
+}

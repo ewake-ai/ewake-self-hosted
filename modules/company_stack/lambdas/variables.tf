@@ -165,3 +165,8 @@ variable "company_base_url" {
 variable "tenant_name" {
   type = string
 }
+
+variable "reactive_lambda_memory_mb" {
+  description = "Memory for the reactive Lambda. 10240 is the AWS maximum and the right value: an investigation that fans out to sub-agents has been killed at 2048. A new AWS account caps this at 3008 until the quota is raised."
+  type        = number
+}

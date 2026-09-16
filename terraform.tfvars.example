@@ -87,6 +87,12 @@ azs = ["eu-west-3a", "eu-west-3b"]
 # See README -> "Inbound webhooks on a private deployment".
 # public_inbound_base_url = "https://ewake-inbound.example.com"
 # alb_ingress_cidrs  = ["10.10.0.0/16", "10.38.0.0/23"]
+#
+# Only if your account's Lambda memory quota is still the 3008 MB a new AWS
+# account starts with. The default is the 10240 maximum, and an apply against a
+# capped account fails naming the ceiling. See README → "Lambda memory quota".
+# reactive_lambda_memory_mb = 3008
+#
 # vpc_cidr           = "10.10.0.0/16"
 # rds_instance_class = "db.t4g.small"
 # rds_storage_gb     = 50

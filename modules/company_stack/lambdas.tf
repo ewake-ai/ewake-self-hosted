@@ -29,6 +29,7 @@ module "lambdas" {
   company                      = var.company
   tenant_name                  = var.tenant_name
   company_base_url             = local.company_base_url
+  reactive_lambda_memory_mb    = var.reactive_lambda_memory_mb
   arn_prefix                   = local.arn_prefix
   ssm_path                     = local.ssm_path
   task_role_arn                = aws_iam_role.task.arn

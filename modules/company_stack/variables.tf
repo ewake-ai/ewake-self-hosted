@@ -327,3 +327,8 @@ variable "public_inbound_base_url" {
     error_message = "public_inbound_base_url must be an https:// URL; Slack and Datadog refuse to deliver to anything else."
   }
 }
+
+variable "reactive_lambda_memory_mb" {
+  description = "Memory for the reactive Lambda, passed through to the lambdas child module."
+  type        = number
+}

@@ -19,7 +19,8 @@ For upgrades of an existing deployment, see [UPGRADING.md](UPGRADING.md).
 | 3 | A domain delegated to a Route53 hosted zone in that account |
 | 4 | An OIDC identity provider |
 | 5 | Bedrock model access in `eu-west-3` |
-| 6 | Network access to the deployment, if it is private |
+| 6 | A Lambda memory quota of 10240 MB |
+| 7 | Network access to the deployment, if it is private |
 
 **Region.** `eu-west-3` (Paris) is the only supported region. Terraform rejects
 any other at `plan`. Contact Ewake if you need a different one.
@@ -37,6 +38,35 @@ Secrets Manager under `ewake/<tenant_name>/<company.name>/app`, key
 **Bedrock.** Contact Ewake for the current list of models. Your AWS account
 owner must accept the Marketplace agreement for each one, because that accepts
 the vendor's licence terms for your account. Enable all of them.
+
+**Lambda memory quota.** A new AWS account caps Lambda memory at 3008 MB. The
+Lambda that runs investigations is sized at the 10240 MB maximum, deliberately:
+2048 was not enough, and one that fans out to sub-agents has been killed
+mid-investigation. On a capped account the apply fails with
+
+```
+ValidationException: 'MemorySize' value failed to satisfy constraint:
+Member must have value less than or equal to 3008
+```
+
+Raise it before you apply — AWS Support, **Service limit increase → Lambda**,
+asking for a function memory limit of 10240 MB in `eu-west-3`. It is usually
+granted the same day.
+
+AWS does not expose this limit through an API, so there is no command that
+answers it directly. A useful hint is the account's concurrency, which AWS
+restricts alongside memory on a new account:
+
+```sh
+aws lambda get-account-settings --query 'AccountLimit.ConcurrentExecutions'
+```
+
+`1000` is the unrestricted default. Anything lower means the account is still
+capped, and its memory limit is almost certainly 3008 as well.
+
+If you cannot raise it, set `reactive_lambda_memory_mb = 3008` and apply. The
+deployment works, but a large investigation may still run out of memory. Raise
+the quota and then the variable when you can.
 
 **Network access.** Only if you set `alb_internal = true`. See
 [Private deployments](#private-deployments).

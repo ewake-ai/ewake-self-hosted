@@ -42,7 +42,11 @@ resource "aws_lambda_function" "reactive_processor" {
   # the headroom also cuts latency, and the GB-second cost of a ceiling nobody reaches is a
   # rounding error next to an investigation that dies in front of a customer. A run that does not
   # clip finally reports what it actually used, which is what to size from later.
-  memory_size                    = 10240
+  #
+  # A variable rather than that number outright, because a new AWS account caps Lambda memory at
+  # 3008 MB until the quota is raised, and an apply against one fails with a ValidationException
+  # naming the ceiling. See README, "Lambda memory quota".
+  memory_size                    = var.reactive_lambda_memory_mb
   reserved_concurrent_executions = 8
 
   environment {
