@@ -66,12 +66,11 @@ resource "aws_lambda_function" "reactive_processor" {
         POSTGRES_PASSWORD = var.postgres_password
         # Above the Lambda default of 2 — the agent loop drains background tasks
         # concurrently with agent storage. The connection budget is shared across all runtimes.
-        POSTGRES_POOL_MAX            = "5"
-        NEO4J_URI                    = var.neo4j_uri
-        NEO4J_USERNAME               = var.neo4j_username
-        NEO4J_PASSWORD               = var.neo4j_password
-        LOG_CLUSTERING_FUNCTION_NAME = var.log_clustering_function_name
-        JWT_SECRET                   = var.jwt_secret
+        POSTGRES_POOL_MAX = "5"
+        NEO4J_URI         = var.neo4j_uri
+        NEO4J_USERNAME    = var.neo4j_username
+        NEO4J_PASSWORD    = var.neo4j_password
+        JWT_SECRET        = var.jwt_secret
       },
       # The server gates its internal API on this either way, so an empty string would fail
       # closed at the first result post rather than leaving the API open.
@@ -92,9 +91,9 @@ resource "aws_lambda_function" "reactive_processor" {
       var.company.features.cloudwatchMcpSidecar && var.cloudwatch_mcp_url != null ? {
         CLOUDWATCH_MCP_SERVER_URL = var.cloudwatch_mcp_url
       } : {},
-      var.log_clustering_sidecar_url != null ? {
+      {
         LOG_CLUSTERING_SIDECAR_URL = var.log_clustering_sidecar_url
-      } : {}
+      }
     )
   }
 

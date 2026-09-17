@@ -85,12 +85,9 @@ variable "tags" {
   type = map(string)
 }
 
-variable "log_clustering_function_name" {
-  type = string
-}
 
 variable "log_clustering_sidecar_url" {
-  description = "Base URL of the log-clustering sidecar, or null when the feature is off. Null means the agent runtime keeps invoking the Lambda."
+  description = "Base URL of the log-clustering sidecar, which every deployment runs."
   type        = string
 }
 

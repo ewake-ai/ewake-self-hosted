@@ -109,10 +109,8 @@ resource "aws_ecs_task_definition" "reactive" {
         { name = "INTERNAL_BASE_URL", value = local.company_base_url },
         { name = "DD_SERVICE", value = "reactive" },
         { name = "LAMBDA_QUEUE_URL", value = aws_sqs_queue.lambda.url },
-        { name = "LOG_CLUSTERING_FUNCTION_NAME", value = var.log_clustering_function_name },
-        ], local.log_clustering_sidecar_enabled ? [
         { name = "LOG_CLUSTERING_SIDECAR_URL", value = local.log_clustering_sidecar_url },
-        ] : [], [
+        ], [
         # Dashboard API — low usage, and its ceiling doubles during a rolling
         # deploy. The connection budget is shared across all runtimes.
         { name = "POSTGRES_POOL_MAX", value = "3" },
@@ -158,17 +156,6 @@ resource "aws_ecs_task_definition" "reactive" {
         ] : [],
         local.orchestrator_secret_value_from != null ? [
           { name = "ORCHESTRATOR_SECRET", valueFrom = local.orchestrator_secret_value_from },
-        ] : [],
-        # Absent when no App is configured: the application then reads all three as empty, drops
-        # the install action, and offers GitHub with the token form alone.
-        local.github_app_enabled ? [
-          { name = "GITHUB_CLIENT_ID", valueFrom = "${one(aws_secretsmanager_secret.github_app[*].arn)}:CLIENT_ID::" },
-          # The only runtime given the signing key. Every other one asks this task for an
-          # installation token over the internal API rather than carrying it.
-          { name = "GITHUB_APP_PRIVATE_KEY", valueFrom = "${one(aws_secretsmanager_secret.github_app[*].arn)}:APP_PRIVATE_KEY::" },
-          # The <slug> in github.com/apps/<slug>, which is the only way to address an App in an
-          # install URL. Read from the secret rather than assumed, since it is yours.
-          { name = "GITHUB_APP_SLUG", valueFrom = "${one(aws_secretsmanager_secret.github_app[*].arn)}:APP_SLUG::" },
         ] : [],
         var.notion_secret_arn != null ? [
           { name = "NOTION_CLIENT_ID", valueFrom = "${var.notion_secret_arn}:CLIENT_ID::" },
@@ -285,8 +272,9 @@ resource "aws_ecs_service" "reactive" {
   depends_on = [
     aws_secretsmanager_secret_version.company_neo4j,
     aws_secretsmanager_secret_version.company_db,
-    # Same race, same fix: the three GITHUB_* values are referenced through the secret's ARN, and
-    # on a first apply the version behind it is written in the same graph. Empty when no App is set.
+    # Same race, different reader: the dashboard reads this secret itself at runtime, so nothing
+    # in the task definition references it and only this line orders the two. Keep it — a task that
+    # starts first would answer "no App configured" until its next read. Empty when none is set.
     aws_secretsmanager_secret_version.github_app,
     terraform_data.db_migrate,
     aws_lambda_invocation.seed_company,
@@ -311,8 +299,8 @@ resource "aws_ecs_service" "reactive" {
     # to a second miner and make the templates a query returns depend on which one
     # answered. Scaling reactive out means giving that sidecar shared state first.
     precondition {
-      condition     = !local.log_clustering_sidecar_enabled || var.company.desired_count == 1
-      error_message = "features.logClusteringSidecar requires desired_count = 1 (got ${var.company.desired_count}): the sidecar's drain3 miner is per-process state."
+      condition     = var.company.desired_count == 1
+      error_message = "desired_count must be 1 (got ${var.company.desired_count}): the log-clustering sidecar's drain3 miner is per-process state."
     }
   }
 

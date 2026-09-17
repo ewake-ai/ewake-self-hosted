@@ -121,11 +121,6 @@ data "aws_iam_policy_document" "task" {
     resources = ["*"] # ECR auth requires "*"; the specific repos are restricted below
   }
 
-  statement {
-    sid       = "InvokeLogClustering"
-    actions   = ["lambda:InvokeFunction"]
-    resources = [var.log_clustering_function_arn]
-  }
 
   statement {
     sid       = "BedrockInvoke"

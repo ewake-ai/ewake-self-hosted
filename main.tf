@@ -31,8 +31,6 @@ module "company" {
   rds_port                       = aws_db_instance.this.port
   rds_master_secret_arn          = aws_secretsmanager_secret.rds_master.arn
   bootstrap_lambda_function_name = aws_lambda_function.bootstrap.function_name
-  log_clustering_function_name   = aws_lambda_function.log_clustering.function_name
-  log_clustering_function_arn    = aws_lambda_function.log_clustering.arn
   datadog_forwarder_arn          = null
   datadog_api_key_secret_arn     = null
   datadog_pg_secret_arn          = null

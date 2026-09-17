@@ -40,7 +40,6 @@ variable "company" {
       langsmith            = optional(bool, false)
       ambient              = optional(bool, true)
       cloudwatchMcpSidecar = optional(bool, false)
-      logClusteringSidecar = optional(bool, false)
     }), {})
   })
 

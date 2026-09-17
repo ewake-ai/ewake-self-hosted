@@ -26,32 +26,31 @@ module "lambdas" {
   # Lambda updated first fails every internal call and loses the run to SQS redelivery.
   depends_on = [aws_ecs_service.reactive]
 
-  company                      = var.company
-  tenant_name                  = var.tenant_name
-  company_base_url             = local.company_base_url
-  reactive_lambda_memory_mb    = var.reactive_lambda_memory_mb
-  arn_prefix                   = local.arn_prefix
-  ssm_path                     = local.ssm_path
-  task_role_arn                = aws_iam_role.task.arn
-  private_subnets              = var.private_subnets
-  ecs_task_sg_id               = var.ecs_task_sg_id
-  rds_endpoint                 = var.rds_endpoint
-  rds_port                     = var.rds_port
-  postgres_password            = random_password.company_db.result
-  neo4j_uri                    = local.neo4j_uri
-  neo4j_username               = local.neo4j_username
-  neo4j_password               = random_password.company_neo4j.result
-  deployment_mode              = var.deployment_mode
-  datadog_enabled              = !local.is_byoc
-  datadog_base_env             = local.datadog_lambda_base_env
-  datadog_api_key              = one(data.aws_secretsmanager_secret_version.datadog_api_key[*].secret_string)
-  datadog_forwarder_arn        = var.datadog_forwarder_arn
-  reactive_image_uri           = var.lambda_image_uris["reactive"]
-  log_clustering_function_name = var.log_clustering_function_name
-  aws_region                   = data.aws_region.current.name
-  sqs_queue_arn                = aws_sqs_queue.lambda.arn
-  langsmith_enabled            = !local.is_byoc
-  langsmith_secret_string      = one(data.aws_secretsmanager_secret_version.langsmith[*].secret_string)
+  company                   = var.company
+  tenant_name               = var.tenant_name
+  company_base_url          = local.company_base_url
+  reactive_lambda_memory_mb = var.reactive_lambda_memory_mb
+  arn_prefix                = local.arn_prefix
+  ssm_path                  = local.ssm_path
+  task_role_arn             = aws_iam_role.task.arn
+  private_subnets           = var.private_subnets
+  ecs_task_sg_id            = var.ecs_task_sg_id
+  rds_endpoint              = var.rds_endpoint
+  rds_port                  = var.rds_port
+  postgres_password         = random_password.company_db.result
+  neo4j_uri                 = local.neo4j_uri
+  neo4j_username            = local.neo4j_username
+  neo4j_password            = random_password.company_neo4j.result
+  deployment_mode           = var.deployment_mode
+  datadog_enabled           = !local.is_byoc
+  datadog_base_env          = local.datadog_lambda_base_env
+  datadog_api_key           = one(data.aws_secretsmanager_secret_version.datadog_api_key[*].secret_string)
+  datadog_forwarder_arn     = var.datadog_forwarder_arn
+  reactive_image_uri        = var.lambda_image_uris["reactive"]
+  aws_region                = data.aws_region.current.name
+  sqs_queue_arn             = aws_sqs_queue.lambda.arn
+  langsmith_enabled         = !local.is_byoc
+  langsmith_secret_string   = one(data.aws_secretsmanager_secret_version.langsmith[*].secret_string)
   # Header on reactive-Lambda self-calls to the internal API; without it a finished run cannot report its result.
   # Ternary, not coalesce — coalesce(null, "") throws.
   orchestrator_secret = local.is_byoc ? random_password.orchestrator_secret[0].result : (
@@ -71,35 +70,34 @@ module "lambdas" {
 module "scheduled_lambdas" {
   source = "./lambdas/scheduled"
 
-  company                      = var.company
-  tenant_name                  = var.tenant_name
-  arn_prefix                   = local.arn_prefix
-  ssm_path                     = local.ssm_path
-  task_role_arn                = aws_iam_role.task.arn
-  private_subnets              = var.private_subnets
-  ecs_task_sg_id               = var.ecs_task_sg_id
-  rds_endpoint                 = var.rds_endpoint
-  rds_port                     = var.rds_port
-  postgres_password            = random_password.company_db.result
-  neo4j_uri                    = local.neo4j_uri
-  neo4j_username               = local.neo4j_username
-  neo4j_password               = random_password.company_neo4j.result
-  deployment_mode              = var.deployment_mode
-  datadog_enabled              = !local.is_byoc
-  datadog_base_env             = local.datadog_lambda_base_env
-  datadog_forwarder_arn        = var.datadog_forwarder_arn
-  langsmith_enabled            = !local.is_byoc
-  langsmith_secret_string      = one(data.aws_secretsmanager_secret_version.langsmith[*].secret_string)
-  datadog_api_key              = one(data.aws_secretsmanager_secret_version.datadog_api_key[*].secret_string)
-  lambda_bundle_image_uri      = var.lambda_bundle_image_uri
-  lambda_queue_url             = aws_sqs_queue.lambda.url
-  log_clustering_function_name = var.log_clustering_function_name
-  log_clustering_sidecar_url   = local.log_clustering_sidecar_url
-  cloudwatch_mcp_url           = local.cloudwatch_mcp_url
-  # Reaches the log-clustering sidecar on 8000 and the CloudWatch MCP one on 8931 through the same
-  # SG, whose rules log_clustering_sidecar.tf and cloudwatch_mcp.tf self-reference; either sidecar
-  # needs the Lambdas inside it.
-  internal_sg_id = (local.log_clustering_sidecar_enabled || local.cloudwatch_mcp_enabled) ? aws_security_group.internal.id : null
+  company                    = var.company
+  tenant_name                = var.tenant_name
+  arn_prefix                 = local.arn_prefix
+  ssm_path                   = local.ssm_path
+  task_role_arn              = aws_iam_role.task.arn
+  private_subnets            = var.private_subnets
+  ecs_task_sg_id             = var.ecs_task_sg_id
+  rds_endpoint               = var.rds_endpoint
+  rds_port                   = var.rds_port
+  postgres_password          = random_password.company_db.result
+  neo4j_uri                  = local.neo4j_uri
+  neo4j_username             = local.neo4j_username
+  neo4j_password             = random_password.company_neo4j.result
+  deployment_mode            = var.deployment_mode
+  datadog_enabled            = !local.is_byoc
+  datadog_base_env           = local.datadog_lambda_base_env
+  datadog_forwarder_arn      = var.datadog_forwarder_arn
+  langsmith_enabled          = !local.is_byoc
+  langsmith_secret_string    = one(data.aws_secretsmanager_secret_version.langsmith[*].secret_string)
+  datadog_api_key            = one(data.aws_secretsmanager_secret_version.datadog_api_key[*].secret_string)
+  lambda_bundle_image_uri    = var.lambda_bundle_image_uri
+  lambda_queue_url           = aws_sqs_queue.lambda.url
+  log_clustering_sidecar_url = local.log_clustering_sidecar_url
+  cloudwatch_mcp_url         = local.cloudwatch_mcp_url
+  # Reaches the log-clustering sidecar on 8000 and the CloudWatch MCP one on 8931 through the
+  # same SG, whose rules log_clustering_sidecar.tf and cloudwatch_mcp.tf self-reference. Every
+  # deployment runs the first, so its Lambdas are always inside it.
+  internal_sg_id = aws_security_group.internal.id
   # knowledge-graph alone: it asks reactive for a GitHub installation token over the internal API.
   internal_reactive_base_url = local.internal_reactive_base_url
   orchestrator_secret = local.is_byoc ? random_password.orchestrator_secret[0].result : (

@@ -334,34 +334,21 @@ own OIDC provider — see Prerequisites.
 
 #### GitHub
 
-Connecting GitHub means creating a GitHub App in your own organisation and
-having the deployment act as it. There is no other route: the dashboard has no
-token form for GitHub, and reads are made with short-lived installation tokens
-that are minted on demand and never stored.
+GitHub is read through a GitHub App installed on your organisation. There is no
+token form: reads use installation tokens, minted on demand and never stored.
 
-The three variables below are optional only in the sense that a deployment which
-does not read GitHub can leave them unset. Leave them unset and the dashboard
-says there is no App configured, which is accurate — there is nothing to
-connect.
+There are two ways to get the App, and you do not have to choose before you
+apply.
 
-1. In your organisation, open **Settings → Developer settings → GitHub Apps →
-   New GitHub App**. Any name will do; the App is yours.
-2. Under **Webhook**, clear **Active**. The integration reads GitHub and
-   receives nothing from it, so it needs no webhook URL and no inbound path into
-   your network.
-3. Grant these **read-only** repository permissions: Metadata, Contents, Pull
-   requests, Issues, Actions, Deployments. Under organisation permissions, grant
-   **Members: Read-only**.
-4. Under **Where can this GitHub App be installed?**, choose **Only on this
-   account**.
-5. Create the App, then **Generate a private key**. GitHub downloads a `.pem`
-   file once and keeps no copy.
-6. Take the **Client ID** from the App's settings page, and the slug from its
-   settings URL: `github.com/organizations/<org>/settings/apps/<slug>`.
+**Register it from the dashboard (no Terraform).** Go to **Integrations →
+GitHub**, give it your organisation login, and the dashboard sends you to GitHub
+with a prepared manifest. GitHub creates the App and hands the credentials back
+to your deployment, which writes them to
+`ewake/<tenant_name>/<company.name>/github-app` in your own account. No private
+key ever passes through Terraform, your state file, or whoever runs the apply.
+Registering an App this way needs no apply and no restart.
 
-Set all three in `terraform.tfvars` and apply. A `.tfvars` file takes literal
-values only — `file()` and every other function is rejected there with
-`Error: Function calls not allowed` — so paste the PEM in as a heredoc:
+**Or seed it from Terraform**, if you already have an App you want to reuse:
 
 ```hcl
 github_app_client_id = "Iv23li..."
@@ -374,27 +361,25 @@ MIIEowIBAAKCAQEA...
 EOT
 ```
 
-To keep the key in its own file instead, pass it through the environment, where
-`cat` is available:
+A `.tfvars` file takes literal values only — `file()` and every other function
+is rejected there with `Error: Function calls not allowed` — so paste the PEM as
+a heredoc. To keep it in its own file, pass it through the environment instead:
 
 ```sh
 export TF_VAR_github_app_private_key="$(cat yourcompany-ewake.private-key.pem)"
 terraform apply
 ```
 
-Terraform writes the three to `ewake/<tenant>/<company>/github-app` in your
-account and injects them into the dashboard task. The private key also reaches
-Terraform state, so the backend holding that state wants encryption and
-restricted reads.
+Set all three or none. One or two fails the plan rather than half-enabling the
+feature. The private key reaches Terraform state, so the backend holding that
+state wants encryption and restricted reads — which is the reason to prefer
+registering from the dashboard.
 
-Setting only one or two of the three fails the plan rather than half-enabling
-the feature. Requires `app_image_tag` at `ewake-v0.182.0` or later — set them on
-an older build and Terraform writes the secret, but the dashboard ignores it.
+Either way, once the App exists the GitHub card gains an **Install** action.
+Install it on the organisation, not on your user account: the deployment reads
+an organisation and refuses a personal installation.
 
-After the apply, the GitHub card in the dashboard gains an **Install** action.
-It sends you to GitHub to install the App, and GitHub sends you back. Install it
-on the organisation, not on your user account: the deployment reads an
-organisation and refuses a personal installation.
+Requires `app_image_tag` at `ewake-v0.182.0` or later.
 
 #### CloudWatch
 

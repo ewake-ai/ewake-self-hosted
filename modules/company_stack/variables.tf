@@ -17,7 +17,6 @@ variable "company" {
       langsmith            = bool
       ambient              = bool
       cloudwatchMcpSidecar = optional(bool, false)
-      logClusteringSidecar = optional(bool, false)
     })
   })
 
@@ -227,15 +226,7 @@ variable "db_migrate_image_uri" {
   type        = string
 }
 
-variable "log_clustering_function_name" {
-  description = "Name of the log-clustering Lambda. Injected as LOG_CLUSTERING_FUNCTION_NAME into every runtime that clusters logs."
-  type        = string
-}
 
-variable "log_clustering_function_arn" {
-  description = "ARN of the same Lambda, used to scope the task role's lambda:InvokeFunction grant."
-  type        = string
-}
 
 variable "lambda_image_uris" {
   description = "Map of <lambda-directory-name> => fully-qualified ECR image URI (with tag). Only the reactive Lambda still has its own repository; the scheduled ones share lambda_bundle_image_uri."

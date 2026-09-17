@@ -20,13 +20,11 @@ company = {
   # all in that case. Adding a connector later switches login over.
   sso_connectors = ["google"]
 
-  # Optional sidecars, both off by default. Each one is a permanent container in
-  # the dashboard task, so turn on only what this deployment reads.
-  #
-  # cloudwatchMcpSidecar lets the agent read CloudWatch logs and metrics. Connect
-  # the CloudWatch integration in the dashboard *before* setting this — a sidecar
-  # started with none connected stays down until the service is redeployed. See
-  # README → "CloudWatch".
+  # cloudwatchMcpSidecar lets the agent read CloudWatch logs and metrics. It adds
+  # a permanent container to the dashboard task, so it is off unless you need it.
+  # Connect the CloudWatch integration in the dashboard *before* setting this — a
+  # sidecar started with none connected stays down until the service is
+  # redeployed. See README → "CloudWatch".
   # features = {
   #   cloudwatchMcpSidecar = true
   # }

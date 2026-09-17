@@ -10,6 +10,31 @@ Always run `terraform plan` first and read it. Anything that destroys or
 replaces RDS, the Neo4j volume or the load balancer needs attention before you
 continue. Contact Ewake if the plan does.
 
+## One-time: log clustering moves off its Lambda
+
+Applies to any deployment first applied before this release. One apply, no manual
+steps.
+
+Log clustering ran as a Lambda beside the deployment and is now a container
+alongside the dashboard, which every deployment runs. The plan destroys
+`<tenant_name>-log-clustering` **and its log group**, and removes the
+`features.logClusteringSidecar` flag — the sidecar is no longer optional, so if
+your `terraform.tfvars` sets that flag, delete the line before applying.
+Terraform refuses an undeclared variable.
+
+```sh
+terraform apply
+```
+
+The dashboard service is replaced during the apply, so log clustering is
+unavailable for the length of one rolling deployment. Nothing else is affected,
+and there is nothing to migrate: the clusterer keeps no state between runs that
+outlives the process.
+
+If you run the dashboard with `desired_count` above 1, the plan now fails rather
+than warns. The clusterer keeps its miner in process memory, so a second task
+would answer the same query differently depending on which one took it.
+
 ## Nothing to do: the GitHub App and the CloudWatch sidecar
 
 Both are new opt-in features, and both stay off unless you turn them on. An

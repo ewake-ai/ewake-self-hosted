@@ -38,10 +38,8 @@ locals {
     NEO4J_USERNAME               = var.neo4j_username
     NEO4J_PASSWORD               = var.neo4j_password
     AMBIENT_AGENT_PERIOD_MINUTES = 15
-    LOG_CLUSTERING_FUNCTION_NAME = var.log_clustering_function_name
-    }, var.log_clustering_sidecar_url != null ? {
-    LOG_CLUSTERING_SIDECAR_URL = var.log_clustering_sidecar_url
-    } : {}, var.cloudwatch_mcp_url != null ? {
+    LOG_CLUSTERING_SIDECAR_URL   = var.log_clustering_sidecar_url
+    }, var.cloudwatch_mcp_url != null ? {
     # The CloudWatch survey is the second consumer of a sidecar after the dashboard, and reads
     # this exact variable name. Null already means the feature is off, so nothing is re-tested
     # here — and without it the survey treats the estate as having no connected region and skips
