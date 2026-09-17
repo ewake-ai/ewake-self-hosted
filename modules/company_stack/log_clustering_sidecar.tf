@@ -28,11 +28,13 @@ locals {
 # No discovery service of its own: task_discovery.tf already registers the task, and every
 # container shares its single awsvpc ENI, so this sidecar is reachable at that same name on
 # its own port. ECS accepts exactly one service_registries entry per service anyway.
+# No apostrophe in the description: EC2 rejects one outright, and only on create -- an existing
+# rule keeps whatever it was made with.
 resource "aws_vpc_security_group_ingress_rule" "log_clustering_self" {
   security_group_id            = aws_security_group.internal.id
   referenced_security_group_id = aws_security_group.internal.id
   from_port                    = 8000
   to_port                      = 8000
   ip_protocol                  = "tcp"
-  description                  = "log-clustering sidecar on 8000, from this deployment's Lambdas only"
+  description                  = "log-clustering sidecar on 8000, from the Lambdas of this deployment only"
 }

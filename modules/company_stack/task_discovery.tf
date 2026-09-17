@@ -72,7 +72,7 @@ resource "aws_vpc_security_group_ingress_rule" "internal_reactive" {
   from_port                    = 3000
   to_port                      = 3000
   ip_protocol                  = "tcp"
-  description                  = "reactive internal API, from this deployment's Lambdas only"
+  description                  = "reactive internal API, from the Lambdas of this deployment only"
 
   lifecycle {
     # description is applied state; ignore drift so a wording change is never a plan diff.

@@ -45,5 +45,5 @@ resource "aws_vpc_security_group_ingress_rule" "cloudwatch_mcp_self" {
   from_port                    = 8931
   to_port                      = 8931
   ip_protocol                  = "tcp"
-  description                  = "cloudwatch-mcp sidecar on 8931, from this deployment's Lambdas only"
+  description                  = "cloudwatch-mcp sidecar on 8931, from the Lambdas of this deployment only"
 }
