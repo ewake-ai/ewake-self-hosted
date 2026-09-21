@@ -38,7 +38,7 @@ company = {
 # Check the release notes for the version you want and set it here. Ewake keeps
 # a limited number of builds, so a tag named here goes away eventually — a fresh
 # install should name a recent one rather than copying this line unchanged.
-app_image_tag = "ewake-v0.182.0"
+app_image_tag = "ewake-v0.189.0"
 
 root_domain    = "ewake.yourcompany.com"
 hosted_zone_id = "Z0123456789ABCDEFGHIJ"
@@ -85,6 +85,18 @@ azs = ["eu-west-3a", "eu-west-3b"]
 # See README -> "Inbound webhooks on a private deployment".
 # public_inbound_base_url = "https://ewake-inbound.example.com"
 # alb_ingress_cidrs  = ["10.10.0.0/16", "10.38.0.0/23"]
+#
+# Container Insights is off by default: it bills per metric series and nothing
+# in this deployment reads it. Per-task CPU and memory stay free under AWS/ECS
+# either way. Set true for the per-container breakdown in the ECS console.
+# container_insights = true
+#
+# Interface endpoints carry the AWS API calls this deployment makes (SSM,
+# Secrets Manager, ECR, CloudWatch Logs) over PrivateLink. They are on because
+# they are the only path that works when NAT egress is filtered, and each one
+# bills hourly per availability zone. Set false to use the NAT path instead —
+# only if egress from the private subnets is unrestricted.
+# vpc_interface_endpoints = false
 #
 # Only if your account's Lambda memory quota is still the 3008 MB a new AWS
 # account starts with. The default is the 10240 maximum, and an apply against a

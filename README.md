@@ -142,7 +142,7 @@ company = {
   sso_connectors = ["google"]
 }
 
-app_image_tag  = "ewake-v0.182.0"
+app_image_tag  = "ewake-v0.189.0"
 root_domain    = "ewake.example.com"
 hosted_zone_id = "Z0123456789ABCDEFGHIJ"
 azs            = ["eu-west-3a", "eu-west-3b"]
@@ -166,6 +166,29 @@ apply pinned to it fails — the release notes list what is current.
 | `rds_instance_class` | `db.t4g.small` | Increase for larger teams |
 | `rds_multi_az` | `true` | `false` costs less in non-production |
 | `neo4j_instance_type` | `t4g.small` | Must be a Graviton (arm64) type |
+
+## Cost options
+
+Two settings exist only to let you trade cost against something you may not
+need. Both are safe to leave alone.
+
+`container_insights` sends the ECS Container Insights metrics, billed per metric
+series. It is `false`, because nothing in this deployment reads them. Per-task
+CPU and memory come from the free `AWS/ECS` namespace either way, so turning it
+on buys the per-container breakdown in the ECS console and nothing else.
+
+`vpc_interface_endpoints` carries this deployment's AWS API calls — SSM, Secrets
+Manager, ECR and CloudWatch Logs — over PrivateLink endpoints inside the VPC.
+It is `true`, because it is the only path that works when egress through the NAT
+gateway is filtered, and SSM is how you reach a private deployment at all. Each
+endpoint bills hourly in every availability zone you run.
+
+Set it to `false` only when egress from the private subnets is unrestricted. The
+same calls then go out through the NAT gateway, which charges for data processed
+rather than by the hour, so image pulls move from free to metered. If you are
+unsure whether your egress is filtered, leave it on: the failure mode is a
+deployment that cannot pull an image or reach Secrets Manager, and you will meet
+it on the next task replacement rather than at apply time.
 
 ## Private deployments
 
