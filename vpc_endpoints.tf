@@ -1,6 +1,7 @@
 # See vpc.tf for the duplication note.
 
 resource "aws_security_group" "vpc_endpoints" {
+  count       = var.vpc_interface_endpoints ? 1 : 0
   name        = "${var.tenant_name}-vpc-endpoints"
   description = "Allow HTTPS from inside the VPC to interface endpoints"
   vpc_id      = aws_vpc.this.id
@@ -30,13 +31,13 @@ locals {
 }
 
 resource "aws_vpc_endpoint" "interface" {
-  for_each = local.interface_endpoints
+  for_each = var.vpc_interface_endpoints ? local.interface_endpoints : toset([])
 
   vpc_id              = aws_vpc.this.id
   service_name        = "com.amazonaws.${data.aws_region.current.name}.${each.value}"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private[*].id
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
 
   tags = {

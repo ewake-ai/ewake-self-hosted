@@ -10,6 +10,21 @@ Always run `terraform plan` first and read it. Anything that destroys or
 replaces RDS, the Neo4j volume or the load balancer needs attention before you
 continue. Contact Ewake if the plan does.
 
+## Container Insights is now off unless you ask for it
+
+Applies to any deployment first applied before this release. One apply, no manual
+steps, nothing to do beforehand.
+
+The ECS cluster sent Container Insights metrics. It no longer does, because the
+metrics are billed per series and nothing in the deployment reads them. The plan
+shows one in-place update to `aws_ecs_cluster`, and CloudWatch stops receiving
+the `ECS/ContainerInsights` namespace for this cluster.
+
+Per-task CPU and memory are unaffected: those come from the `AWS/ECS` namespace,
+which is free and always on. Nothing in the deployment queries either one.
+
+Set `container_insights = true` in `terraform.tfvars` to keep the old behaviour.
+
 ## One-time: log clustering moves off its Lambda
 
 Applies to any deployment first applied before this release. One apply, no manual

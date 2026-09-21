@@ -348,3 +348,15 @@ variable "reactive_lambda_memory_mb" {
     error_message = "reactive_lambda_memory_mb must be between 2048 and 10240. Below 2048 the reactive Lambda has been seen to run out of memory mid-investigation."
   }
 }
+
+variable "container_insights" {
+  description = "Send ECS Container Insights metrics for this cluster. Off by default: it is billed per metric series and nothing in this deployment reads it. Per-task CPU and memory stay available for free under the AWS/ECS namespace either way. Turn it on if you want the per-container breakdown in the ECS console."
+  type        = bool
+  default     = false
+}
+
+variable "vpc_interface_endpoints" {
+  description = "Reach AWS APIs (SSM, Secrets Manager, ECR, CloudWatch Logs) over PrivateLink interface endpoints in this VPC. On by default, because it is the only path that works when egress through the NAT gateway is filtered. Each endpoint bills hourly per availability zone, so a deployment with unrestricted egress can set this to false and reach the same APIs over the NAT path instead; expect NAT data processing charges on image pulls in exchange."
+  type        = bool
+  default     = true
+}
