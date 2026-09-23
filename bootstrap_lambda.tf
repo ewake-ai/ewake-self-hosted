@@ -66,12 +66,23 @@ resource "aws_security_group" "bootstrap_lambda" {
     cidr_blocks = local.vpc_cidr_blocks
   }
 
+  # This function reads the RDS master secret before it connects to anything, so
+  # Secrets Manager has to be reachable or it blocks until the 60-second timeout —
+  # no error, no partial progress, just "Task timed out". Which destination that is
+  # depends on how the deployment reaches AWS APIs at all: interface endpoints
+  # answer on addresses inside the VPC, and without them the call leaves through the
+  # NAT gateway or proxy and the VPC range is the one range that cannot carry it.
+  #
+  # The description below reads oddly now that the destination is conditional, and it
+  # stays as it is on purpose: a rule's description is applied state, so rewording it
+  # updates every live security group and drags the module's IAM roles and the task
+  # definition along behind it. Comments are free; this string is not.
   egress {
     description = "AWS interface endpoints"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = local.vpc_cidr_blocks
+    cidr_blocks = local.vpc_interface_endpoints ? local.vpc_cidr_blocks : ["0.0.0.0/0"]
   }
 
   tags = {
