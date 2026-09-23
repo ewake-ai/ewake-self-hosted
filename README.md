@@ -116,15 +116,27 @@ dig +short NS ewake.example.com @8.8.8.8
 
 ### DLM role
 
-If this account has ever used AWS Data Lifecycle Manager, the role already
-exists and the first apply fails with `EntityAlreadyExists`. Import it first:
+`AWSDataLifecycleManagerDefaultRole` is an account-global name that AWS creates
+itself the first time Data Lifecycle Manager is used. If this account already
+has it, the first apply fails with `EntityAlreadyExists`.
 
 ```sh
-aws iam get-role --role-name AWSDataLifecycleManagerDefaultRole \
-  && terraform import aws_iam_role.dlm_default AWSDataLifecycleManagerDefaultRole
+aws iam get-role --role-name AWSDataLifecycleManagerDefaultRole
 ```
 
-`NoSuchEntity` means there is nothing to import.
+`NoSuchEntity` means there is nothing to do. Otherwise set:
+
+```hcl
+create_dlm_default_role = false
+```
+
+The Neo4j snapshot policy references the role by name either way. Importing it
+instead also works, and leaves this deployment managing a role it shares with
+the rest of the account:
+
+```sh
+terraform import 'aws_iam_role.dlm_default[0]' AWSDataLifecycleManagerDefaultRole
+```
 
 ## Configuration
 
@@ -179,9 +191,12 @@ on buys the per-container breakdown in the ECS console and nothing else.
 
 `vpc_interface_endpoints` carries this deployment's AWS API calls — SSM, Secrets
 Manager, ECR and CloudWatch Logs — over PrivateLink endpoints inside the VPC.
-It is `true`, because it is the only path that works when egress through the NAT
-gateway is filtered, and SSM is how you reach a private deployment at all. Each
-endpoint bills hourly in every availability zone you run.
+Left unset it is on where this deployment creates the VPC, because that is the
+only path that works when egress through the NAT gateway is filtered, and SSM is
+how you reach a private deployment at all. It is off where `existing_network`
+supplies the VPC, since a managed VPC usually has these endpoints already and
+AWS rejects a second one for the same service with private DNS. Each endpoint
+bills hourly in every availability zone you run.
 
 Set it to `false` only when egress from the private subnets is unrestricted. The
 same calls then go out through the NAT gateway, which charges for data processed
