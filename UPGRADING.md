@@ -144,6 +144,77 @@ header makes the request route.
 **2. Remove the old name.** Once the new hostname works, set `company_host` to
 it and empty both variables above.
 
+## Moving a running deployment into a different VPC
+
+There is no apply that does this. Changing the subnets under a running
+deployment asks RDS to move a live instance between VPCs, which it refuses, and
+asks for a load balancer whose name is already taken. Editing `existing_network`
+or `vpc_cidr` on a deployment that is already up will not work.
+
+Build the new one beside the old one instead, move the data across, and switch
+over when it answers. The old deployment keeps running the whole time and stays
+as the way back.
+
+**1. Snapshot the database.**
+
+```sh
+aws rds create-db-snapshot \
+  --db-instance-identifier <tenant_name> \
+  --db-snapshot-identifier <tenant_name>-move-$(date +%Y%m%d)
+```
+
+Wait for `Status: available` before going on — the restore in step 3 reads it.
+
+**2. Give the new deployment its own state.** Same repository, a separate state
+key, so the two never share a plan:
+
+```sh
+terraform init -reconfigure \
+  -backend-config=bucket=<your state bucket> \
+  -backend-config=key=byoc-new/terraform.tfstate \
+  -backend-config=region=<region>
+```
+
+**3. Write its tfvars.** Copy the old ones and change four things:
+
+```hcl
+tenant_name = "<something else>"        # resource names must not collide
+
+company = {
+  public_id = "<UNCHANGED>"             # see the warning below
+  # ...everything else as before
+}
+
+existing_network        = { vpc_id = "...", private_subnet_ids = [...] }
+rds_snapshot_identifier = "<the snapshot from step 1>"
+create_dlm_default_role = false         # the old deployment owns that role
+```
+
+> **`company.public_id` must not change.** It is the name of the database inside
+> the instance. Restore a snapshot under a different `public_id` and the
+> deployment creates a second, empty database alongside your real one, comes up
+> perfectly healthy, and shows nothing. `tenant_name` is free to change; this is
+> not.
+
+Then `terraform apply`. Expect it to take about twenty minutes.
+
+**4. Check it before you switch anything.** The new deployment is private and
+nothing points at it yet, so reach it by its own load balancer name from inside
+your network. It should serve the dashboard and show your existing data — if the
+company looks new and empty, stop and re-read the warning above.
+
+**5. Switch the hostname over.** Repoint your DNS record at the new load
+balancer. `terraform output dns_wiring` prints what it needs.
+
+**6. Destroy the old deployment** once you are satisfied, from its own state
+directory. See the teardown section of the README: the database has deletion
+protection on and that is deliberate, so removing it is a deliberate act.
+
+Two things do not come across, both on purpose. The knowledge graph starts empty
+and fills itself again from your integrations over the following day. Any
+integration you connected is re-read from its secret, which is per deployment, so
+plan to reconnect them.
+
 ## The plan wants to replace the RDS subnet group
 
 A deployment first applied before this repository moved to generated names has a

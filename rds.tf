@@ -47,6 +47,25 @@ resource "random_id" "final_snapshot" {
 resource "aws_db_instance" "this" {
   identifier = var.tenant_name
 
+  # Restore the database from a snapshot instead of creating it empty. This is the
+  # only way to carry data across a change RDS will not make in place — moving the
+  # deployment into a different VPC, most of all, which AWS refuses outright on a
+  # Multi-AZ instance and which otherwise means starting from nothing.
+  #
+  # The procedure is in UPGRADING.md. In short: snapshot the old instance, set this,
+  # apply, then leave it set.
+  #
+  # Leave it set, because snapshot_identifier is create-only: removing it would
+  # ordinarily plan a replacement, which on a live database means destroying the very
+  # data this restored. ignore_changes makes the removal a no-op instead, so nobody
+  # loses a database by tidying up their tfvars afterwards.
+  snapshot_identifier = var.rds_snapshot_identifier
+
+  # Omitted when restoring: the master user comes from the snapshot and RDS rejects
+  # an attempt to name a different one. The password below is still applied, through
+  # a modify after the restore, so the secret this deployment writes stays true.
+  username = var.rds_snapshot_identifier == null ? "postgres" : null
+
   engine                      = "postgres"
   engine_version              = "18.4"
   allow_major_version_upgrade = true
@@ -57,7 +76,6 @@ resource "aws_db_instance" "this" {
   multi_az                    = var.rds_multi_az
   db_subnet_group_name        = aws_db_subnet_group.this.name
   vpc_security_group_ids      = [aws_security_group.rds.id]
-  username                    = "postgres"
   password                    = random_password.rds_master.result
   backup_retention_period     = 7
   # Hardcoded, not a variable: its job is not stopping a deliberate destroy — that
@@ -78,6 +96,10 @@ resource "aws_db_instance" "this" {
   # random_id is drawn once at create and stored, so plans stay quiet, the name stays
   # unique across rebuilds, and terraform still knows what to call the snapshot.
   final_snapshot_identifier = "${var.tenant_name}-final-${random_id.final_snapshot.hex}"
+
+  lifecycle {
+    ignore_changes = [snapshot_identifier]
+  }
 
   tags = {
     Name = var.tenant_name

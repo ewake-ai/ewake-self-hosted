@@ -397,3 +397,9 @@ variable "create_dlm_default_role" {
   type        = bool
   default     = true
 }
+
+variable "rds_snapshot_identifier" {
+  description = "Restore the database from this RDS snapshot instead of creating an empty one, at first apply. The way to keep data across a move RDS will not make in place, such as into a different VPC. Once set, leave it set: the attribute is create-only and removing it is ignored rather than planning a replacement. See UPGRADING.md."
+  type        = string
+  default     = null
+}
