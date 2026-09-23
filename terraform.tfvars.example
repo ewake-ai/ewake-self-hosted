@@ -60,8 +60,26 @@ hosted_zone_id = "Z0123456789ABCDEFGHIJ"
 # extra_certificate_arns = ["arn:aws:acm:eu-west-3:123456789012:certificate/..."]
 # alb_extra_host_headers = ["old.yourcompany.com"]
 
-# Two or more availability zones, all in aws_region.
+# Two or more availability zones, all in aws_region. Leave unset if you set
+# existing_network below: the zones are then whatever your subnets are in.
 azs = ["eu-west-3a", "eu-west-3b"]
+
+# Deploy into a VPC you already run, instead of having one created. For a central
+# landing zone, or any account where the addressing is not yours to invent. No VPC,
+# subnets, NAT gateways, route tables or routes are created; azs, vpc_cidr and
+# transit_gateway_id stop applying. The private subnets must have egress, must span
+# two availability zones, and must be reachable from wherever users open the
+# dashboard. See README -> "Deploying into a VPC you already have".
+# existing_network = {
+#   vpc_id             = "vpc-0123456789abcdef0"
+#   private_subnet_ids = ["subnet-0aaa...", "subnet-0bbb..."]
+#
+#   # Optional; used only for the S3 gateway endpoint, which is skipped without them.
+#   private_route_table_ids = ["rtb-0aaa...", "rtb-0bbb..."]
+#
+#   # Only with alb_internal = false.
+#   public_subnet_ids = ["subnet-0ccc...", "subnet-0ddd..."]
+# }
 
 # Reach the dashboard from your own network instead of the public internet.
 # Attaches this VPC to a transit gateway already shared with this account — an
@@ -92,10 +110,12 @@ azs = ["eu-west-3a", "eu-west-3b"]
 # container_insights = true
 #
 # Interface endpoints carry the AWS API calls this deployment makes (SSM,
-# Secrets Manager, ECR, CloudWatch Logs) over PrivateLink. They are on because
-# they are the only path that works when NAT egress is filtered, and each one
-# bills hourly per availability zone. Set false to use the NAT path instead —
-# only if egress from the private subnets is unrestricted.
+# Secrets Manager, ECR, CloudWatch Logs) over PrivateLink. Unset means on when
+# this deployment creates the VPC — the only path that works when NAT egress is
+# filtered — and off with existing_network, where they usually exist already and
+# AWS refuses a duplicate with private DNS. Each one bills hourly per availability
+# zone. Set false to use the NAT path instead, only if egress from the private
+# subnets is unrestricted; set true in an existing VPC that has none.
 # vpc_interface_endpoints = false
 #
 # Only if your account's Lambda memory quota is still the 3008 MB a new AWS
@@ -103,7 +123,7 @@ azs = ["eu-west-3a", "eu-west-3b"]
 # capped account fails naming the ceiling. See README → "Lambda memory quota".
 # reactive_lambda_memory_mb = 3008
 #
-# vpc_cidr           = "10.10.0.0/16"
+# vpc_cidr           = "10.10.0.0/16"   # ignored with existing_network
 # rds_instance_class = "db.t4g.small"
 # rds_storage_gb     = 50
 # rds_multi_az       = true

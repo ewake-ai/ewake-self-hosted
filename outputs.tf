@@ -9,13 +9,13 @@ output "alb_dns_name" {
 }
 
 output "vpc_id" {
-  description = "ID of the VPC this deployment created. Needed when a transit gateway attachment has to be identified or accepted from the gateway owner's account."
-  value       = aws_vpc.this.id
+  description = "ID of the VPC this deployment runs in — the one it created, or the one existing_network supplied. Needed when a transit gateway attachment has to be identified or accepted from the gateway owner's account."
+  value       = local.vpc_id
 }
 
 output "vpc_cidr" {
-  description = "Primary CIDR of the VPC. The network on the other side of a transit gateway needs a route back to this range."
-  value       = aws_vpc.this.cidr_block
+  description = "Primary CIDR of that VPC. The network on the other side of a transit gateway needs a route back to this range."
+  value       = one(slice(local.vpc_cidr_blocks, 0, 1))
 }
 
 output "dns_wiring" {

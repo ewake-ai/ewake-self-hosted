@@ -56,14 +56,14 @@ resource "aws_iam_role_policy" "bootstrap_lambda" {
 resource "aws_security_group" "bootstrap_lambda" {
   name        = "${var.tenant_name}-rds-bootstrap-lambda"
   description = "Tenant RDS bootstrap Lambda. Egress to the VPC CIDR on 5432 (RDS) only."
-  vpc_id      = aws_vpc.this.id
+  vpc_id      = local.vpc_id
 
   egress {
     description = "RDS Postgres"
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.this.cidr_block]
+    cidr_blocks = local.vpc_cidr_blocks
   }
 
   egress {
@@ -71,7 +71,7 @@ resource "aws_security_group" "bootstrap_lambda" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.this.cidr_block]
+    cidr_blocks = local.vpc_cidr_blocks
   }
 
   tags = {
@@ -96,7 +96,7 @@ resource "aws_lambda_function" "bootstrap" {
   memory_size = 256
 
   vpc_config {
-    subnet_ids         = aws_subnet.private[*].id
+    subnet_ids         = local.private_subnets
     security_group_ids = [aws_security_group.bootstrap_lambda.id]
   }
 

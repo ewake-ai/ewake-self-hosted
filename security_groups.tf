@@ -6,7 +6,7 @@ resource "aws_security_group" "alb" {
   # lets the two coexist for the seconds it takes to swap; tags.Name stays readable.
   name_prefix = "${var.tenant_name}-alb-"
   description = "ALB ingress, from var.alb_ingress_cidrs (the public internet by default)"
-  vpc_id      = aws_vpc.this.id
+  vpc_id      = local.vpc_id
 
   lifecycle {
     create_before_destroy = true
@@ -50,7 +50,7 @@ resource "aws_security_group" "ecs_task" {
   # ecs_task_from_alb below.
   name        = "${var.tenant_name}-ecs-task"
   description = "ECS task ingress from the ALB only"
-  vpc_id      = aws_vpc.this.id
+  vpc_id      = local.vpc_id
 
   lifecycle {
     # description is immutable in AWS; ignore drift so a wording change never forces
@@ -81,7 +81,7 @@ resource "aws_vpc_security_group_ingress_rule" "ecs_task_from_alb" {
 resource "aws_security_group" "rds" {
   name        = "${var.tenant_name}-rds"
   description = "RDS Postgres ingress from ECS tasks in this VPC only"
-  vpc_id      = aws_vpc.this.id
+  vpc_id      = local.vpc_id
 
   lifecycle {
     # description is immutable in AWS; ignore drift so a wording change never forces

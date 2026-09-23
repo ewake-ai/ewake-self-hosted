@@ -84,9 +84,14 @@ variable "company_host" {
 # Set alb_internal and alb_ingress_cidrs together: `internal` only removes the
 # public addresses, the security group is what refuses a packet.
 variable "transit_gateway_id" {
-  description = "Transit gateway to attach this VPC to. It must already be shared with this account. Null creates no attachment."
+  description = "Transit gateway to attach this VPC to. It must already be shared with this account. Null creates no attachment. Not usable with existing_network: a VPC you supply is attached to your network by you."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.transit_gateway_id == null || var.existing_network == null
+    error_message = "transit_gateway_id cannot be combined with existing_network. The attachment, its route table association and its propagation all belong to whoever owns the VPC, and attaching a VPC that is already attached fails at apply. Leave it null and route to the deployment's subnets the way you route to the rest of that VPC."
+  }
 }
 
 variable "transit_gateway_routes" {
@@ -209,11 +214,12 @@ variable "github_app_private_key" {
 }
 
 variable "azs" {
-  description = "Availability zones to use, two or more, all in aws_region."
+  description = "Availability zones to build subnets in, two or more, all in aws_region. Leave unset with existing_network: the zones are then whatever the supplied subnets are in, and nothing here is read."
   type        = list(string)
+  default     = []
 
   validation {
-    condition     = length(var.azs) >= 2
+    condition     = length(var.azs) >= 2 || var.existing_network != null
     error_message = "At least two AZs are required for the ALB and RDS multi-AZ."
   }
 
@@ -228,9 +234,33 @@ variable "azs" {
 }
 
 variable "vpc_cidr" {
-  description = "CIDR for the VPC. Changing it later requires a rebuild, not an apply."
+  description = "CIDR for the VPC this deployment creates. Changing it later requires a rebuild, not an apply. Ignored with existing_network, where the addressing is yours."
   type        = string
   default     = "10.10.0.0/16"
+}
+
+# Supply a VPC instead of having one created. See network.tf for what the
+# deployment then relies on and cannot check — egress, routing, free addresses.
+variable "existing_network" {
+  description = "Deploy into a VPC you already run, instead of creating one. vpc_id and at least two private subnets in different availability zones are required; public_subnet_ids only when alb_internal is false. private_route_table_ids is optional and used for nothing but the S3 gateway endpoint, which is skipped when it is empty. Unset (the default) creates the whole network — see vpc.tf."
+  type = object({
+    vpc_id                  = string
+    private_subnet_ids      = list(string)
+    public_subnet_ids       = optional(list(string), [])
+    private_route_table_ids = optional(list(string), [])
+  })
+  default  = null
+  nullable = true
+
+  validation {
+    condition     = var.existing_network == null || length(try(var.existing_network.private_subnet_ids, [])) >= 2
+    error_message = "existing_network.private_subnet_ids needs at least two subnets, in different availability zones: the load balancer and the database both require it. Whether they really are in different zones is checked against AWS at plan time."
+  }
+
+  validation {
+    condition     = var.existing_network == null || var.alb_internal || length(try(var.existing_network.public_subnet_ids, [])) >= 2
+    error_message = "alb_internal = false puts the load balancer in public subnets, so existing_network.public_subnet_ids must list at least two. Set alb_internal = true for a load balancer with private addresses only."
+  }
 }
 
 variable "rds_subnet_group_name" {
@@ -356,7 +386,8 @@ variable "container_insights" {
 }
 
 variable "vpc_interface_endpoints" {
-  description = "Reach AWS APIs (SSM, Secrets Manager, ECR, CloudWatch Logs) over PrivateLink interface endpoints in this VPC. On by default, because it is the only path that works when egress through the NAT gateway is filtered. Each endpoint bills hourly per availability zone, so a deployment with unrestricted egress can set this to false and reach the same APIs over the NAT path instead; expect NAT data processing charges on image pulls in exchange."
+  description = "Reach AWS APIs (SSM, Secrets Manager, ECR, CloudWatch Logs) over PrivateLink interface endpoints in this VPC. Unset means on when this deployment creates the VPC — the only path that works when egress through the NAT gateway is filtered — and off when existing_network supplies one, where they usually exist already and AWS refuses a second endpoint for the same service with private DNS. Setting true or false always wins. Each endpoint bills hourly per availability zone, so a deployment with unrestricted egress can set this to false and reach the same APIs over the NAT path instead; expect NAT data processing charges on image pulls in exchange."
   type        = bool
-  default     = true
+  default     = null
+  nullable    = true
 }

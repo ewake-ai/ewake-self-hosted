@@ -14,7 +14,7 @@ resource "aws_db_subnet_group" "this" {
   # database is touched.
   name        = var.rds_subnet_group_name
   name_prefix = var.rds_subnet_group_name == null ? "${var.tenant_name}-" : null
-  subnet_ids  = aws_subnet.private[*].id
+  subnet_ids  = local.private_subnets
 
   tags = {
     Name = var.tenant_name

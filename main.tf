@@ -18,8 +18,8 @@ module "company" {
   extra_host_headers             = var.alb_extra_host_headers
   aws_region                     = var.aws_region
   common_tags                    = local.common_tags
-  vpc_id                         = aws_vpc.this.id
-  private_subnets                = aws_subnet.private[*].id
+  vpc_id                         = local.vpc_id
+  private_subnets                = local.private_subnets
   ecs_cluster_arn                = aws_ecs_cluster.this.arn
   alb_arn                        = aws_lb.this.arn
   alb_dns_name                   = aws_lb.this.dns_name

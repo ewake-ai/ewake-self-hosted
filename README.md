@@ -232,6 +232,60 @@ Items 3 and 4 are automatic if the gateway has default route table association
 and propagation enabled. `terraform output vpc_id` and
 `terraform output vpc_cidr` give the values the gateway owner needs.
 
+### Deploying into a VPC you already have
+
+Everything above assumes this deployment builds its own VPC. If your addressing
+is planned centrally — a landing zone, a network account, ranges that must not
+collide with production — supply a VPC instead and it will build none:
+
+```hcl
+existing_network = {
+  vpc_id             = "vpc-0123456789abcdef0"
+  private_subnet_ids = ["subnet-0aaa...", "subnet-0bbb..."]
+
+  # Optional. Only used for the S3 gateway endpoint, which is skipped without
+  # them rather than writing routes into tables you did not name.
+  private_route_table_ids = ["rtb-0aaa...", "rtb-0bbb..."]
+}
+
+alb_internal      = true
+alb_ingress_cidrs = ["10.0.0.0/8"]   # the ranges your users reach it from
+```
+
+No VPC, subnets, internet gateway, NAT gateways, route tables or routes are
+created. `azs`, `vpc_cidr` and `transit_gateway_id` stop applying — the zones
+come from the subnets you name, the addressing is yours, and attaching the VPC
+to your network is something you have already done. Setting
+`transit_gateway_id` in this mode is refused rather than ignored.
+
+What the subnets have to provide, none of which this deployment can check for
+you:
+
+1. **Egress.** Private subnets with a route to the internet or to an approved
+   proxy. Images are pulled from Ewake's registry, Bedrock is called for every
+   agent run, and connected integrations are reached outbound. No NAT gateway is
+   created here. Without egress nothing starts, and the first symptom is an
+   image pull timeout that reads like a permissions problem.
+2. **Two availability zones.** At least one private subnet in each. The load
+   balancer and the database both require it. Checked at plan.
+3. **Free addresses.** Eight per subnet for the load balancer, plus one per ECS
+   task and per Lambda ENI. A subnet with a handful left will fail at apply.
+4. **A route in, and back out.** However users reach the dashboard — VPN,
+   transit gateway, peering — the deployment's subnets have to be on it.
+
+Interface endpoints are off by default in this mode: a VPC like this usually has
+them already, and AWS refuses a second endpoint for the same service with
+private DNS enabled. Set `vpc_interface_endpoints = true` if yours does not have
+them and egress is filtered.
+
+Every CIDR on the VPC is admitted to the security groups, not just the primary,
+so a secondary range works without further configuration.
+
+> **This is a first-apply decision.** Moving a running deployment into a
+> different VPC replaces its subnets, and with them the load balancer, the
+> database and the graph store. It is a rebuild, not an apply. Contact Ewake
+> before attempting it.
+
 ### Inbound webhooks
 
 A private load balancer has no route from the internet, so Slack and Datadog

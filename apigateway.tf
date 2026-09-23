@@ -18,7 +18,7 @@ locals {
   # The VPC link reaches the ALB from inside the VPC, so its range has to be
   # admitted whatever the customer scoped alb_ingress_cidrs down to — a private
   # deployment may list only a VPN range, which would leave the gateway timing out.
-  alb_ingress_cidrs = local.public_inbound_gateway ? distinct(concat(var.alb_ingress_cidrs, [var.vpc_cidr])) : var.alb_ingress_cidrs
+  alb_ingress_cidrs = local.public_inbound_gateway ? distinct(concat(var.alb_ingress_cidrs, local.vpc_cidr_blocks)) : var.alb_ingress_cidrs
 
   gateway_base_url = local.public_inbound_gateway ? "https://${aws_apigatewayv2_api.public_inbound[0].id}.execute-api.${var.aws_region}.amazonaws.com" : null
 }
@@ -42,7 +42,7 @@ resource "aws_security_group" "vpc_link" {
 
   name_prefix = "${var.tenant_name}-vpc-link-"
   description = "API Gateway VPC link to the ALB"
-  vpc_id      = aws_vpc.this.id
+  vpc_id      = local.vpc_id
 
   lifecycle {
     create_before_destroy = true
@@ -55,7 +55,7 @@ resource "aws_security_group" "vpc_link" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+    cidr_blocks = local.vpc_cidr_blocks
   }
 
   tags = { Name = "${var.tenant_name}-vpc-link" }
@@ -66,7 +66,7 @@ resource "aws_apigatewayv2_vpc_link" "public_inbound" {
   count = local.public_inbound_gateway ? 1 : 0
 
   name               = "${var.tenant_name}-public-inbound"
-  subnet_ids         = aws_subnet.private[*].id
+  subnet_ids         = local.private_subnets
   security_group_ids = [aws_security_group.vpc_link[0].id]
 
   tags = local.common_tags

@@ -1,4 +1,8 @@
 resource "aws_vpc" "this" {
+  # Zero when var.existing_network supplies a VPC instead. Every resource in this
+  # file carries the same gate — see network.tf.
+  count = local.byo_network ? 0 : 1
+
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -9,9 +13,9 @@ resource "aws_vpc" "this" {
 }
 
 resource "aws_subnet" "public" {
-  count = length(var.azs)
+  count = local.created_az_count
 
-  vpc_id            = aws_vpc.this.id
+  vpc_id            = aws_vpc.this[0].id
   cidr_block        = cidrsubnet(var.vpc_cidr, 4, count.index)
   availability_zone = var.azs[count.index]
 
@@ -26,9 +30,9 @@ resource "aws_subnet" "public" {
 }
 
 resource "aws_subnet" "private" {
-  count = length(var.azs)
+  count = local.created_az_count
 
-  vpc_id            = aws_vpc.this.id
+  vpc_id            = aws_vpc.this[0].id
   cidr_block        = cidrsubnet(var.vpc_cidr, 4, count.index + length(var.azs))
   availability_zone = var.azs[count.index]
 
@@ -39,7 +43,9 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_internet_gateway" "this" {
-  vpc_id = aws_vpc.this.id
+  count = local.byo_network ? 0 : 1
+
+  vpc_id = aws_vpc.this[0].id
 
   tags = {
     Name = "${var.tenant_name}-igw"
@@ -47,7 +53,7 @@ resource "aws_internet_gateway" "this" {
 }
 
 resource "aws_eip" "nat" {
-  count  = length(var.azs)
+  count  = local.created_az_count
   domain = "vpc"
 
   tags = {
@@ -56,7 +62,7 @@ resource "aws_eip" "nat" {
 }
 
 resource "aws_nat_gateway" "this" {
-  count = length(var.azs)
+  count = local.created_az_count
 
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
@@ -79,7 +85,9 @@ resource "aws_nat_gateway" "this" {
 # The two cannot be mixed on one table (the provider overwrites in-line rules),
 # so if a route ever needs adding here, add another aws_route.
 resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.this.id
+  count = local.byo_network ? 0 : 1
+
+  vpc_id = aws_vpc.this[0].id
 
   tags = {
     Name = "${var.tenant_name}-public-rt"
@@ -87,20 +95,22 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route" "public_default" {
-  route_table_id         = aws_route_table.public.id
+  count = local.byo_network ? 0 : 1
+
+  route_table_id         = aws_route_table.public[0].id
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.this.id
+  gateway_id             = aws_internet_gateway.this[0].id
 }
 
 resource "aws_route_table_association" "public" {
   count          = length(aws_subnet.public)
   subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
+  route_table_id = aws_route_table.public[0].id
 }
 
 resource "aws_route_table" "private" {
-  count  = length(var.azs)
-  vpc_id = aws_vpc.this.id
+  count  = local.created_az_count
+  vpc_id = aws_vpc.this[0].id
 
   tags = {
     Name = "${var.tenant_name}-private-rt-${var.azs[count.index]}"
@@ -110,7 +120,7 @@ resource "aws_route_table" "private" {
 # See the note above aws_route_table.public: standalone so a customer-managed
 # VPN or peering route on the same table survives our applies.
 resource "aws_route" "private_default" {
-  count                  = length(var.azs)
+  count                  = local.created_az_count
   route_table_id         = aws_route_table.private[count.index].id
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = aws_nat_gateway.this[count.index].id
@@ -127,10 +137,12 @@ resource "aws_route_table_association" "private" {
 # needs one subnet per AZ to build its ENIs, and the private subnets are the
 # ones whose traffic it carries.
 resource "aws_ec2_transit_gateway_vpc_attachment" "this" {
-  count = var.transit_gateway_id != null ? 1 : 0
+  # var.existing_network rejects transit_gateway_id outright (variables.tf), so the
+  # byo_network term is belt and braces against a future caller setting both.
+  count = !local.byo_network && var.transit_gateway_id != null ? 1 : 0
 
   transit_gateway_id = var.transit_gateway_id
-  vpc_id             = aws_vpc.this.id
+  vpc_id             = aws_vpc.this[0].id
   subnet_ids         = aws_subnet.private[*].id
 
   # Both false because the TGW belongs to another account. Association and
@@ -162,7 +174,7 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "this" {
 # One route per CIDR per private table. Standalone, like every route here, so a
 # route the customer adds themselves is never clobbered.
 resource "aws_route" "private_transit_gateway" {
-  for_each = var.transit_gateway_id != null ? {
+  for_each = !local.byo_network && var.transit_gateway_id != null ? {
     for pair in setproduct(range(length(var.azs)), var.transit_gateway_routes) :
     "${pair[0]}-${pair[1]}" => { rt_index = pair[0], cidr = pair[1] }
   } : {}
