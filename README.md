@@ -312,6 +312,68 @@ API Gateway that routes only these paths. Anything else returns 404:
 The dashboard, the API and SSO are not routed. Reach those over your own
 network.
 
+## Using a database you already have
+
+By default this deployment creates its own RDS Postgres instance. If you
+provision databases centrally — your own standards, your own backups, your own
+sizing — hand one over instead:
+
+```hcl
+existing_database = {
+  identifier        = "ewake-prod"
+  master_secret_arn = "arn:aws:secretsmanager:eu-west-3:123456789012:secret:..."
+
+  # Optional. Naming your instance's security group lets this deployment add the
+  # two ingress rules it needs. Leave it out and add them yourself.
+  security_group_id = "sg-0123456789abcdef0"
+}
+```
+
+No instance, subnet group, master password, master secret or database security
+group is created. The instance must be RDS Postgres, version 18 or later, in this
+account and region.
+
+### What this deployment still does to your instance
+
+It creates its own database inside it, named after `company.public_id`, and two
+roles named after `company.name` — one that owns the database, one read-only. The
+same thing it does to an instance it creates itself, through the same Lambda,
+which runs once at first apply.
+
+It gives this deployment an instance to itself, in practice. It does not drop
+anything, but it expects the database and role names to be free.
+
+### What it needs from you
+
+**The master credentials**, in a Secrets Manager secret shaped like:
+
+```json
+{ "username": "postgres", "password": "..." }
+```
+
+A secret that RDS manages for you works as-is. Read once, at first apply, to
+create the database and the roles above — after that this deployment uses the
+roles it made, not the master user.
+
+> If that secret is encrypted with a customer-managed KMS key, the key policy
+> must let this deployment's roles decrypt it. A denial here looks like a Lambda
+> that times out rather than an error that names the key.
+
+**Network reach.** The instance has to be reachable on its port from the private
+subnets the tasks and the bootstrap Lambda run in. Give `security_group_id` and
+the rules are added to your group for you — as individual rules, so nothing else
+on that group is touched and nothing of yours is ever removed. Leave it out and
+allow the deployment's task and bootstrap security groups yourself; both are
+printed by `terraform output`.
+
+### What stays yours
+
+Backups, snapshots, retention, Multi-AZ, instance class, storage, maintenance
+windows, parameter groups, deletion protection, and the master password. None of
+them appear in this repository's variables, and `rds_instance_class`,
+`rds_storage_gb`, `rds_multi_az` and `rds_snapshot_identifier` all stop applying.
+Rotating the master password after the first apply is safe: it is not read again.
+
 ## First apply
 
 ```sh

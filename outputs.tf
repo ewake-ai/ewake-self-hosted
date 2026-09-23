@@ -93,3 +93,15 @@ output "public_inbound_url" {
   description = "The public entry point Slack and Datadog are registered against, when public_inbound_gateway is on. Null otherwise, and the company host serves those paths itself."
   value       = local.gateway_base_url
 }
+
+# The two groups that talk to Postgres. Printed for a deployment using
+# existing_database without naming its security group: these are what the
+# instance's own group has to admit, and there is no other way to find them
+# short of reading state.
+output "database_client_security_group_ids" {
+  description = "Security groups this deployment reaches the database from — the ECS tasks and reactive Lambda, and the bootstrap Lambda. Allow both on your instance's security group when you do not set existing_database.security_group_id."
+  value = {
+    tasks     = aws_security_group.ecs_task.id
+    bootstrap = aws_security_group.bootstrap_lambda.id
+  }
+}

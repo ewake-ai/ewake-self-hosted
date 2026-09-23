@@ -64,6 +64,26 @@ hosted_zone_id = "Z0123456789ABCDEFGHIJ"
 # existing_network below: the zones are then whatever your subnets are in.
 azs = ["eu-west-3a", "eu-west-3b"]
 
+# Use an RDS Postgres instance you already run, instead of having one created.
+# No instance, subnet group, master password, master secret or database security
+# group is created; rds_instance_class, rds_storage_gb, rds_multi_az and
+# rds_snapshot_identifier all stop applying. The deployment still creates its own
+# database and roles inside your instance, once, at first apply. The secret holds
+# {"username": ..., "password": ...} for the master user. Naming the security group
+# is optional -- it lets the deployment add the two ingress rules it needs to your
+# instance's group instead of you adding them. See README -> "Using a database you
+# already have".
+# existing_database = {
+#   identifier        = "ewake-prod"
+#   master_secret_arn = "arn:aws:secretsmanager:eu-west-3:123456789012:secret:..."
+#   security_group_id = "sg-0123456789abcdef0"
+# }
+
+# Restore the database from a snapshot at first apply, instead of starting empty.
+# The way to carry data into a new VPC, which RDS will not do in place. Once set,
+# leave it set. Not usable with existing_database. See UPGRADING.md.
+# rds_snapshot_identifier = "mytenant-move-20260923"
+
 # Deploy into a VPC you already run, instead of having one created. For a central
 # landing zone, or any account where the addressing is not yours to invent. No VPC,
 # subnets, NAT gateways, route tables or routes are created; azs, vpc_cidr and
