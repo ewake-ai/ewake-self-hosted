@@ -33,7 +33,7 @@ resource "aws_iam_role_policy" "bootstrap_lambda" {
         Effect = "Allow"
         Action = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
         Resource = [
-          aws_secretsmanager_secret.rds_master.arn,
+          local.rds_master_secret_arn,
           "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:ewake/${var.tenant_name}/*"
         ]
       },

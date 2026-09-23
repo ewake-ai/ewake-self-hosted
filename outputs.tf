@@ -86,7 +86,7 @@ output "manual_dns_steps" {
 
 output "rds_endpoint" {
   description = "RDS Postgres endpoint. Not publicly reachable — provided for operator diagnostics via aws ecs execute-command."
-  value       = aws_db_instance.this.address
+  value       = local.rds_endpoint
 }
 
 output "public_inbound_url" {

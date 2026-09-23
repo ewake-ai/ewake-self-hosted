@@ -403,3 +403,33 @@ variable "rds_snapshot_identifier" {
   type        = string
   default     = null
 }
+
+# Use a database you already run, instead of having one created. See database.tf
+# for what this deployment still does to it, and what it needs from you.
+variable "existing_database" {
+  description = "Deploy against an RDS Postgres instance you already run, in this account and region, instead of creating one. identifier is the instance id; master_secret_arn is a Secrets Manager secret holding {username, password} for its master user, which the bootstrap Lambda uses once to create this deployment's database and roles. security_group_id is the instance's own security group: give it and the ingress rules this deployment needs are added there, leave it out and you add them yourself. Unset (the default) creates the instance."
+  type = object({
+    identifier        = string
+    master_secret_arn = string
+    security_group_id = optional(string)
+  })
+  default  = null
+  nullable = true
+
+  validation {
+    condition     = var.existing_database == null || can(regex("^arn:aws[a-z-]*:secretsmanager:", try(var.existing_database.master_secret_arn, "")))
+    error_message = "existing_database.master_secret_arn must be a Secrets Manager secret ARN holding the instance's master username and password."
+  }
+
+  validation {
+    condition     = var.existing_database == null || var.rds_snapshot_identifier == null
+    error_message = "rds_snapshot_identifier restores an instance this deployment creates, and existing_database means it creates none. Restore your snapshot into your own instance instead, then point existing_database at it."
+  }
+}
+
+variable "vpc_s3_gateway_endpoint" {
+  description = "Create the S3 gateway endpoint. Unset means on when this deployment creates the VPC, and off when existing_network supplies one — a gateway endpoint is a route in a route table, most managed VPCs already have one, and a second fails the apply with RouteAlreadyExists. Setting true also requires existing_network.private_route_table_ids, since there is nowhere else to put the routes."
+  type        = bool
+  default     = null
+  nullable    = true
+}

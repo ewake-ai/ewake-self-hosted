@@ -96,6 +96,14 @@ locals {
     for v in data.aws_vpc.existing : v.cidr_block_associations[*].cidr_block
   ]) : [var.vpc_cidr]
 
+  # A gateway endpoint is nothing but a route in each route table, so in a VPC we
+  # were handed it is very likely to be there already — and AWS rejects the second
+  # one with RouteAlreadyExists, mid-apply. Off by default there, on where we built
+  # the VPC ourselves and know there is none.
+  vpc_s3_gateway_endpoint = (
+    var.vpc_s3_gateway_endpoint != null ? var.vpc_s3_gateway_endpoint : !local.byo_network
+  )
+
   # Interface endpoints default to on when we build the VPC and off when we are
   # given one: a landing-zone VPC usually has them already, and a second endpoint
   # for the same service with private DNS is rejected by AWS mid-apply. An explicit

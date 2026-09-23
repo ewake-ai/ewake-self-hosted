@@ -26,10 +26,10 @@ module "company" {
   alb_zone_id                    = aws_lb.this.zone_id
   alb_listener_arn               = aws_lb_listener.https.arn
   ecs_task_sg_id                 = aws_security_group.ecs_task.id
-  rds_endpoint                   = aws_db_instance.this.address
-  rds_resource_id                = aws_db_instance.this.resource_id
-  rds_port                       = aws_db_instance.this.port
-  rds_master_secret_arn          = aws_secretsmanager_secret.rds_master.arn
+  rds_endpoint                   = local.rds_endpoint
+  rds_resource_id                = local.rds_resource_id
+  rds_port                       = local.rds_port
+  rds_master_secret_arn          = local.rds_master_secret_arn
   bootstrap_lambda_function_name = aws_lambda_function.bootstrap.function_name
   datadog_forwarder_arn          = null
   datadog_api_key_secret_arn     = null
@@ -49,6 +49,8 @@ module "company" {
 
   depends_on = [
     aws_db_instance.this,
+    aws_vpc_security_group_ingress_rule.existing_db_from_tasks,
+    aws_vpc_security_group_ingress_rule.existing_db_from_bootstrap,
     aws_lb_listener.https,
     aws_lambda_function.bootstrap,
     aws_iam_role.dlm_default,

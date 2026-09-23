@@ -46,10 +46,10 @@ resource "aws_vpc_endpoint" "interface" {
 }
 
 resource "aws_vpc_endpoint" "s3" {
-  # A gateway endpoint is nothing but routes in route tables. We only have tables to
-  # write into when we built them, or when existing_network named them — otherwise
-  # skip it rather than reach into a customer's routing.
-  count = length(local.private_route_table_ids) > 0 ? 1 : 0
+  # A gateway endpoint is nothing but routes in route tables. Two things gate it: we
+  # must have tables to write into, and we must be confident there is not already an
+  # S3 endpoint on them — see local.vpc_s3_gateway_endpoint in network.tf.
+  count = local.vpc_s3_gateway_endpoint && length(local.private_route_table_ids) > 0 ? 1 : 0
 
   vpc_id            = local.vpc_id
   service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"

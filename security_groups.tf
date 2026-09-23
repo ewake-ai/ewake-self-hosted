@@ -79,6 +79,11 @@ resource "aws_vpc_security_group_ingress_rule" "ecs_task_from_alb" {
 }
 
 resource "aws_security_group" "rds" {
+  # The instance is ours to protect only when it is ours to create. With
+  # var.existing_database the group belongs to the customer — database.tf adds
+  # ingress rules to theirs instead.
+  count = local.byo_database ? 0 : 1
+
   name        = "${var.tenant_name}-rds"
   description = "RDS Postgres ingress from ECS tasks in this VPC only"
   vpc_id      = local.vpc_id

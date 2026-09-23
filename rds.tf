@@ -1,4 +1,7 @@
 resource "aws_db_subnet_group" "this" {
+  # Zero when var.existing_database supplies the instance — see database.tf.
+  count = local.byo_database ? 0 : 1
+
   # name_prefix by default: a fixed name cannot be replaced, and RDS refuses to drop
   # a subnet its instance sits in — so any change to the subnet set would deadlock
   # on a group terraform can neither update nor recreate.
@@ -22,29 +25,39 @@ resource "aws_db_subnet_group" "this" {
 }
 
 resource "random_password" "rds_master" {
+  count = local.byo_database ? 0 : 1
+
   length  = 32
   special = false # avoids characters that need escaping in connection strings
 }
 
 resource "aws_secretsmanager_secret" "rds_master" {
+  count = local.byo_database ? 0 : 1
+
   name = "ewake/${var.tenant_name}/rds/master"
 }
 
 resource "aws_secretsmanager_secret_version" "rds_master" {
-  secret_id = aws_secretsmanager_secret.rds_master.id
+  count = local.byo_database ? 0 : 1
+
+  secret_id = aws_secretsmanager_secret.rds_master[0].id
   secret_string = jsonencode({
     username = "postgres"
-    password = random_password.rds_master.result
-    host     = aws_db_instance.this.address
-    port     = aws_db_instance.this.port
+    password = random_password.rds_master[0].result
+    host     = aws_db_instance.this[0].address
+    port     = aws_db_instance.this[0].port
   })
 }
 
 resource "random_id" "final_snapshot" {
+  count = local.byo_database ? 0 : 1
+
   byte_length = 4
 }
 
 resource "aws_db_instance" "this" {
+  count = local.byo_database ? 0 : 1
+
   identifier = var.tenant_name
 
   # Restore the database from a snapshot instead of creating it empty. This is the
@@ -74,9 +87,9 @@ resource "aws_db_instance" "this" {
   storage_type                = "gp3"
   storage_encrypted           = true
   multi_az                    = var.rds_multi_az
-  db_subnet_group_name        = aws_db_subnet_group.this.name
-  vpc_security_group_ids      = [aws_security_group.rds.id]
-  password                    = random_password.rds_master.result
+  db_subnet_group_name        = aws_db_subnet_group.this[0].name
+  vpc_security_group_ids      = [aws_security_group.rds[0].id]
+  password                    = random_password.rds_master[0].result
   backup_retention_period     = 7
   # Hardcoded, not a variable: its job is not stopping a deliberate destroy — that
   # only needs the one CLI call in the README, since destroy never re-applies
@@ -95,7 +108,7 @@ resource "aws_db_instance" "this" {
   #
   # random_id is drawn once at create and stored, so plans stay quiet, the name stays
   # unique across rebuilds, and terraform still knows what to call the snapshot.
-  final_snapshot_identifier = "${var.tenant_name}-final-${random_id.final_snapshot.hex}"
+  final_snapshot_identifier = "${var.tenant_name}-final-${random_id.final_snapshot[0].hex}"
 
   lifecycle {
     ignore_changes = [snapshot_identifier]
