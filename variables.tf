@@ -391,3 +391,9 @@ variable "vpc_interface_endpoints" {
   default     = null
   nullable    = true
 }
+
+variable "create_dlm_default_role" {
+  description = "Create AWSDataLifecycleManagerDefaultRole, the role the Neo4j snapshot policy runs as. The name is fixed and account-global, and AWS creates it itself the first time Data Lifecycle Manager is used, so an account that already has it must set this to false or the first apply fails with EntityAlreadyExists. The snapshot policy references the role by name either way."
+  type        = bool
+  default     = true
+}

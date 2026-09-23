@@ -123,6 +123,11 @@ azs = ["eu-west-3a", "eu-west-3b"]
 # capped account fails naming the ceiling. See README → "Lambda memory quota".
 # reactive_lambda_memory_mb = 3008
 #
+# AWSDataLifecycleManagerDefaultRole is an account-global name that AWS creates
+# itself the first time Data Lifecycle Manager is used. If your account already has
+# it, set this false or the first apply fails with EntityAlreadyExists.
+# create_dlm_default_role = false
+#
 # vpc_cidr           = "10.10.0.0/16"   # ignored with existing_network
 # rds_instance_class = "db.t4g.small"
 # rds_storage_gb     = 50

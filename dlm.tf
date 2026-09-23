@@ -1,7 +1,15 @@
 # AWS Data Lifecycle Manager role for the Neo4j EBS snapshots. The name must be
 # exactly AWSDataLifecycleManagerDefaultRole, which neo4j.tf refers to.
+#
+# That name is account-global and it is AWS's own: `aws dlm create-default-role`
+# and the first lifecycle policy created in the console both make it. An account
+# that has ever used DLM already has it, and creating it again fails the apply with
+# EntityAlreadyExists. Set create_dlm_default_role = false there; the snapshot
+# policy builds the ARN by name either way, so nothing else changes.
 
 resource "aws_iam_role" "dlm_default" {
+  count = var.create_dlm_default_role ? 1 : 0
+
   name = "AWSDataLifecycleManagerDefaultRole"
   path = "/service-role/"
 
@@ -29,6 +37,8 @@ resource "aws_iam_role" "dlm_default" {
 }
 
 resource "aws_iam_role_policy_attachment" "dlm_default" {
-  role       = aws_iam_role.dlm_default.name
+  count = var.create_dlm_default_role ? 1 : 0
+
+  role       = aws_iam_role.dlm_default[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole"
 }
