@@ -54,5 +54,11 @@ module "company" {
     aws_lb_listener.https,
     aws_lambda_function.bootstrap,
     aws_iam_role.dlm_default,
+    # Everything the module starts in the private subnets needs a way out before it
+    # runs: db-migrate reads its secret and pulls its image the moment it starts, and
+    # in a VPC we were handed these are created in the same apply.
+    aws_vpc_endpoint.interface,
+    aws_vpc_endpoint.s3,
+    aws_route.byo_private_default,
   ]
 }

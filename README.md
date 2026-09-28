@@ -258,8 +258,9 @@ existing_network = {
   vpc_id             = "vpc-0123456789abcdef0"
   private_subnet_ids = ["subnet-0aaa...", "subnet-0bbb..."]
 
-  # Optional. Only used for the S3 gateway endpoint, which is skipped without
-  # them rather than writing routes into tables you did not name.
+  # Optional. Used for the S3 gateway endpoint and create_nat_gateway, both of
+  # which are skipped without them rather than writing routes into tables you
+  # did not name.
   private_route_table_ids = ["rtb-0aaa...", "rtb-0bbb..."]
 }
 
@@ -268,7 +269,7 @@ alb_ingress_cidrs = ["10.0.0.0/8"]   # the ranges your users reach it from
 ```
 
 No VPC, subnets, internet gateway, NAT gateways, route tables or routes are
-created. `azs`, `vpc_cidr` and `transit_gateway_id` stop applying — the zones
+created, unless you ask for egress (below). `azs`, `vpc_cidr` and `transit_gateway_id` stop applying — the zones
 come from the subnets you name, the addressing is yours, and attaching the VPC
 to your network is something you have already done. Setting
 `transit_gateway_id` in this mode is refused rather than ignored.
@@ -279,8 +280,9 @@ you:
 1. **Egress.** Private subnets with a route to the internet or to an approved
    proxy. Images are pulled from Ewake's registry, Bedrock is called for every
    agent run, and connected integrations are reached outbound. No NAT gateway is
-   created here. Without egress nothing starts, and the first symptom is an
-   image pull timeout that reads like a permissions problem.
+   created unless you set `create_nat_gateway` (below). Without egress nothing
+   starts, and the first symptom is an image pull timeout, or a task that cannot
+   read its secrets, that reads like a permissions problem.
 2. **Two availability zones.** At least one private subnet in each. The load
    balancer and the database both require it. Checked at plan.
 3. **Free addresses.** Eight per subnet for the load balancer, plus one per ECS
@@ -292,6 +294,47 @@ Interface endpoints are off by default in this mode: a VPC like this usually has
 them already, and AWS refuses a second endpoint for the same service with
 private DNS enabled. Set `vpc_interface_endpoints = true` if yours does not have
 them and egress is filtered.
+
+#### If the VPC has no way out
+
+A VPC used only for private or VPN-reached workloads can have no internet route
+at all. Interface endpoints get the install through — secrets, image pulls and
+logs — but Bedrock, Slack and GitHub still need the internet. Ask for NAT
+gateways instead:
+
+```hcl
+existing_network = {
+  vpc_id                  = "vpc-0123456789abcdef0"
+  private_subnet_ids      = ["subnet-0aaa...", "subnet-0bbb..."]
+  private_route_table_ids = ["rtb-0aaa...", "rtb-0bbb..."]
+
+  create_nat_gateway = true
+
+  # Where the NAT gateways go. Either subnets you already route to an internet
+  # gateway...
+  # public_subnet_ids = ["subnet-0ccc...", "subnet-0ddd..."]
+  #
+  # ...or free ranges in the VPC that this deployment turns into public
+  # subnets, one NAT gateway each. One is enough; add a second, in the other
+  # zone, only if egress must survive losing a zone.
+  public_subnet_cidrs = ["10.20.8.0/28"]
+
+  # With public_subnet_cidrs, the VPC's internet gateway if it already has one.
+  # Leave unset and one is created; a VPC takes only one, so naming the wrong
+  # one or omitting an existing one fails at apply.
+  # internet_gateway_id = "igw-0123456789abcdef0"
+}
+```
+
+The deployment then adds a `0.0.0.0/0` route to each table in
+`private_route_table_ids`, pointing at the NAT gateway in the same zone as the
+subnets it serves. It never replaces a route of yours: a table that already has
+a default route to anything other than a NAT gateway is refused at plan, because
+that table already has a way out and every other workload on it would be moved
+onto ours. List tables that serve only this deployment's subnets.
+
+Each NAT gateway bills hourly plus per GB. This does not open anything inbound:
+the dashboard stays wherever `alb_internal` and `alb_ingress_cidrs` put it.
 
 Every CIDR on the VPC is admitted to the security groups, not just the primary,
 so a secondary range works without further configuration.

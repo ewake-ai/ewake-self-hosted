@@ -242,12 +242,17 @@ variable "vpc_cidr" {
 # Supply a VPC instead of having one created. See network.tf for what the
 # deployment then relies on and cannot check — egress, routing, free addresses.
 variable "existing_network" {
-  description = "Deploy into a VPC you already run, instead of creating one. vpc_id and at least two private subnets in different availability zones are required; public_subnet_ids only when alb_internal is false. private_route_table_ids is optional and used for nothing but the S3 gateway endpoint, which is skipped when it is empty. Unset (the default) creates the whole network — see vpc.tf."
+  description = "Deploy into a VPC you already run, instead of creating one. vpc_id and at least two private subnets in different availability zones are required; public_subnet_ids only when alb_internal is false. private_route_table_ids is optional and used only by the S3 gateway endpoint and create_nat_gateway. create_nat_gateway adds internet egress for a VPC that has none — see egress.tf. Unset (the default) creates the whole network — see vpc.tf."
   type = object({
     vpc_id                  = string
     private_subnet_ids      = list(string)
     public_subnet_ids       = optional(list(string), [])
     private_route_table_ids = optional(list(string), [])
+
+    # Egress for a VPC with no route to the internet — see egress.tf.
+    create_nat_gateway  = optional(bool, false)
+    public_subnet_cidrs = optional(list(string), [])
+    internet_gateway_id = optional(string)
   })
   default  = null
   nullable = true
@@ -260,6 +265,35 @@ variable "existing_network" {
   validation {
     condition     = var.existing_network == null || var.alb_internal || length(try(var.existing_network.public_subnet_ids, [])) >= 2
     error_message = "alb_internal = false puts the load balancer in public subnets, so existing_network.public_subnet_ids must list at least two. Set alb_internal = true for a load balancer with private addresses only."
+  }
+
+  validation {
+    condition     = !try(var.existing_network.create_nat_gateway, false) || length(try(var.existing_network.private_route_table_ids, [])) >= 1
+    error_message = "existing_network.create_nat_gateway adds the default route to the NAT gateway in the private subnets' route tables, so existing_network.private_route_table_ids must list them."
+  }
+
+  validation {
+    condition = !try(var.existing_network.create_nat_gateway, false) || (
+      (length(try(var.existing_network.public_subnet_ids, [])) > 0) != (length(try(var.existing_network.public_subnet_cidrs, [])) > 0)
+    )
+    error_message = "existing_network.create_nat_gateway needs somewhere to put the NAT gateways: either public_subnet_ids, subnets you already route to an internet gateway, or public_subnet_cidrs, free ranges in the VPC to create them from. Exactly one of the two."
+  }
+
+  validation {
+    condition = try(var.existing_network.create_nat_gateway, false) || (
+      length(try(var.existing_network.public_subnet_cidrs, [])) == 0 && try(var.existing_network.internet_gateway_id, null) == null
+    )
+    error_message = "existing_network.public_subnet_cidrs and internet_gateway_id are only used with create_nat_gateway = true."
+  }
+
+  validation {
+    condition     = try(var.existing_network.internet_gateway_id, null) == null || length(try(var.existing_network.public_subnet_cidrs, [])) > 0
+    error_message = "existing_network.internet_gateway_id is only used for the public subnets created from public_subnet_cidrs. Subnets listed in public_subnet_ids are expected to route to an internet gateway already."
+  }
+
+  validation {
+    condition     = alltrue([for c in try(var.existing_network.public_subnet_cidrs, []) : can(cidrhost(c, 0))])
+    error_message = "Every entry in existing_network.public_subnet_cidrs must be a CIDR block, such as 10.20.8.0/28."
   }
 }
 

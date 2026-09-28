@@ -86,7 +86,8 @@ azs = ["eu-west-3a", "eu-west-3b"]
 
 # Deploy into a VPC you already run, instead of having one created. For a central
 # landing zone, or any account where the addressing is not yours to invent. No VPC,
-# subnets, NAT gateways, route tables or routes are created; azs, vpc_cidr and
+# subnets, NAT gateways, route tables or routes are created unless
+# create_nat_gateway asks for egress; azs, vpc_cidr and
 # transit_gateway_id stop applying. The private subnets must have egress, must span
 # two availability zones, and must be reachable from wherever users open the
 # dashboard. See README -> "Deploying into a VPC you already have".
@@ -97,8 +98,17 @@ azs = ["eu-west-3a", "eu-west-3b"]
 #   # Optional; used only for the S3 gateway endpoint, which is skipped without them.
 #   private_route_table_ids = ["rtb-0aaa...", "rtb-0bbb..."]
 #
-#   # Only with alb_internal = false.
+#   # Only with alb_internal = false, or as the home of create_nat_gateway.
 #   public_subnet_ids = ["subnet-0ccc...", "subnet-0ddd..."]
+#
+#   # Only if the VPC has no route to the internet. Creates NAT gateways and a
+#   # default route to them in private_route_table_ids (required). Put them in
+#   # public_subnet_ids above, or give a free range to create a public subnet
+#   # from (one is enough; one per zone for zone-level resilience). See README ->
+#   # "If the VPC has no way out".
+#   # create_nat_gateway  = true
+#   # public_subnet_cidrs = ["10.20.8.0/28"]
+#   # internet_gateway_id = "igw-..."   # the VPC's, if it already has one
 # }
 
 # Reach the dashboard from your own network instead of the public internet.
