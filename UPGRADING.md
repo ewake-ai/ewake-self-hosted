@@ -10,24 +10,6 @@ Always run `terraform plan` first and read it. Anything that destroys or
 replaces RDS, the Neo4j volume or the load balancer needs attention before you
 continue. Contact Ewake if the plan does.
 
-## One-time: the unused aggregate SSO secret is deleted
-
-Applies to any deployment first applied before this release. One apply, no manual
-steps, nothing to do beforehand.
-
-Each SSO connector has its own secret at
-`ewake/<tenant_name>/<company.name>/sso/<connector-id>`, and those are what the
-login reads. The deployment also created an older secret at
-`ewake/<tenant_name>/<company.name>/sso`, which holds `[]` and which nothing
-reads. The plan destroys it: `aws_secretsmanager_secret.company_sso` and its
-version. Login is unaffected.
-
-Secrets Manager keeps a deleted secret for 30 days. To restore it in that window:
-
-```sh
-aws secretsmanager restore-secret --secret-id "ewake/<tenant_name>/<company.name>/sso"
-```
-
 ## Container Insights is now off unless you ask for it
 
 Applies to any deployment first applied before this release. One apply, no manual
