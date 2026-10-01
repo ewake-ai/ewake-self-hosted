@@ -323,3 +323,8 @@ variable "reactive_lambda_memory_mb" {
   description = "Memory for the reactive Lambda, passed through to the lambdas child module."
   type        = number
 }
+
+variable "scheduled_lambda_memory_mb" {
+  description = "Memory for the scheduled Lambda, passed through to the scheduled child module."
+  type        = number
+}

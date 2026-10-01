@@ -136,3 +136,8 @@ variable "lambda_queue_url" {
   description = "URL of the deployment's Lambda SQS queue. release-watch and incident-follow-up publish onto it, and so does the consolidated scheduled function."
   type        = string
 }
+
+variable "memory_mb" {
+  description = "Memory for the scheduled Lambda. See scheduled_lambda_memory_mb at the root."
+  type        = number
+}

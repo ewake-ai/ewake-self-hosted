@@ -31,9 +31,10 @@ resource "aws_lambda_function" "scheduled" {
   image_uri     = var.lambda_bundle_image_uri
 
   # The ceiling of everything it serves: knowledge-graph and the log surveys need the full 900s,
-  # and datadog/loki-log-analysis need 2048MB.
+  # and one function's memory has to fit the hungriest job. That was datadog/loki-log-analysis at
+  # 2048MB until a large Thanos estate ran thanos-discovery out of memory there.
   timeout     = 900
-  memory_size = 2048
+  memory_size = var.memory_mb
 
   # Restates the image's own CMD: the deploy reads the function's configuration, not the image,
   # to tell which ECR repository re-points it.

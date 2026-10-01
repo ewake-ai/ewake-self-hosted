@@ -91,6 +91,7 @@ module "scheduled_lambdas" {
   langsmith_secret_string    = one(data.aws_secretsmanager_secret_version.langsmith[*].secret_string)
   datadog_api_key            = one(data.aws_secretsmanager_secret_version.datadog_api_key[*].secret_string)
   lambda_bundle_image_uri    = var.lambda_bundle_image_uri
+  memory_mb                  = var.scheduled_lambda_memory_mb
   lambda_queue_url           = aws_sqs_queue.lambda.url
   log_clustering_sidecar_url = local.log_clustering_sidecar_url
   cloudwatch_mcp_url         = local.cloudwatch_mcp_url

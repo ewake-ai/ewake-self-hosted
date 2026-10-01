@@ -413,6 +413,17 @@ variable "reactive_lambda_memory_mb" {
   }
 }
 
+variable "scheduled_lambda_memory_mb" {
+  description = "Memory in MB for the scheduled Lambda, which runs every background job: the knowledge graph every 15 minutes and the daily discovery of each connected source. 4096 by default: a large metrics or tracing estate has run discovery out of memory at 2048. Raise it if a discovery job reports Runtime.OutOfMemory; lower it only for the same Lambda quota reason as reactive_lambda_memory_mb."
+  type        = number
+  default     = 4096
+
+  validation {
+    condition     = var.scheduled_lambda_memory_mb >= 128 && var.scheduled_lambda_memory_mb <= 10240
+    error_message = "scheduled_lambda_memory_mb must be between 128 and 10240, the range AWS Lambda accepts."
+  }
+}
+
 variable "container_insights" {
   description = "Send ECS Container Insights metrics for this cluster. Off by default: it is billed per metric series and nothing in this deployment reads it. Per-task CPU and memory stay available for free under the AWS/ECS namespace either way. Turn it on if you want the per-container breakdown in the ECS console."
   type        = bool
