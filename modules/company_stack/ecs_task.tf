@@ -129,7 +129,8 @@ resource "aws_ecs_task_definition" "reactive" {
           { name = "EWAKE_ORCHESTRATOR_URL", value = var.orchestrator_url }
         ] : [],
         local.reactive_container_env,
-      local._admin_notify_env)
+        local._admin_notify_env,
+      [for name, id in local.llm_model_env : { name = name, value = id }])
       secrets = concat([
         { name = "DEX_CLIENT_SECRET", valueFrom = local.dex_client_secret_value_from },
         { name = "POSTGRES_HOST", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:host::" },

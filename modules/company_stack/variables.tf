@@ -328,3 +328,12 @@ variable "scheduled_lambda_memory_mb" {
   description = "Memory for the scheduled Lambda, passed through to the scheduled child module."
   type        = number
 }
+
+variable "llm_models" {
+  description = "Bedrock model per tier; see llm_models at the root."
+  type = object({
+    simple   = optional(string)
+    medium   = optional(string)
+    advanced = optional(string)
+  })
+}

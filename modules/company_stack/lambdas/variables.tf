@@ -167,3 +167,9 @@ variable "reactive_lambda_memory_mb" {
   description = "Memory for the reactive Lambda. 10240 is the AWS maximum and the right value: an investigation that fans out to sub-agents has been killed at 2048. A new AWS account caps this at 3008 until the quota is raised."
   type        = number
 }
+
+variable "llm_model_env" {
+  description = "SIMPLE_MODEL, MEDIUM_MODEL and ADVANCED_MODEL, for the tiers that are set."
+  type        = map(string)
+  default     = {}
+}

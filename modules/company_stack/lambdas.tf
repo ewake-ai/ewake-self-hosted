@@ -1,3 +1,13 @@
+locals {
+  # Read by the application at process start, as SIMPLE_MODEL, MEDIUM_MODEL and ADVANCED_MODEL.
+  # Only the tiers that are set are sent, so an empty llm_models leaves every env map as it was.
+  llm_model_env = { for name, id in {
+    SIMPLE_MODEL   = var.llm_models.simple
+    MEDIUM_MODEL   = var.llm_models.medium
+    ADVANCED_MODEL = var.llm_models.advanced
+  } : name => id if id != null }
+}
+
 # Lambdas owned by company_stack.
 #
 # `./lambdas` holds the reactive (SQS-triggered) Lambda as a flat .tf file
@@ -30,6 +40,7 @@ module "lambdas" {
   tenant_name               = var.tenant_name
   company_base_url          = local.company_base_url
   reactive_lambda_memory_mb = var.reactive_lambda_memory_mb
+  llm_model_env             = local.llm_model_env
   arn_prefix                = local.arn_prefix
   ssm_path                  = local.ssm_path
   task_role_arn             = aws_iam_role.task.arn
@@ -92,6 +103,7 @@ module "scheduled_lambdas" {
   datadog_api_key            = one(data.aws_secretsmanager_secret_version.datadog_api_key[*].secret_string)
   lambda_bundle_image_uri    = var.lambda_bundle_image_uri
   memory_mb                  = var.scheduled_lambda_memory_mb
+  llm_model_env              = local.llm_model_env
   lambda_queue_url           = aws_sqs_queue.lambda.url
   log_clustering_sidecar_url = local.log_clustering_sidecar_url
   cloudwatch_mcp_url         = local.cloudwatch_mcp_url

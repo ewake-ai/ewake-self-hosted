@@ -91,6 +91,7 @@ resource "aws_lambda_function" "reactive_processor" {
       var.company.features.cloudwatchMcpSidecar && var.cloudwatch_mcp_url != null ? {
         CLOUDWATCH_MCP_SERVER_URL = var.cloudwatch_mcp_url
       } : {},
+      var.llm_model_env,
       {
         LOG_CLUSTERING_SIDECAR_URL = var.log_clustering_sidecar_url
       }

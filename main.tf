@@ -47,6 +47,7 @@ module "company" {
   neo4j_instance_type        = var.neo4j_instance_type
   reactive_lambda_memory_mb  = var.reactive_lambda_memory_mb
   scheduled_lambda_memory_mb = var.scheduled_lambda_memory_mb
+  llm_models                 = var.llm_models
 
   depends_on = [
     aws_db_instance.this,

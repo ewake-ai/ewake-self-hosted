@@ -157,6 +157,14 @@ azs = ["eu-west-3a", "eu-west-3b"]
 # source). 4096 by default; raise it if a discovery job logs Runtime.OutOfMemory.
 # scheduled_lambda_memory_mb = 4096
 #
+# The Bedrock model behind each tier, when the image's defaults are not enabled on this
+# account or not the ones you want. Unset tiers keep the default. Needs ewake-v0.196.0+.
+# llm_models = {
+#   simple   = "eu.anthropic.claude-haiku-4-5-20251001-v1:0"  # sub-agents
+#   medium   = "eu.anthropic.claude-sonnet-4-6"               # fallback, summaries
+#   advanced = "eu.anthropic.claude-opus-4-8"                 # the investigation
+# }
+#
 # AWSDataLifecycleManagerDefaultRole is an account-global name that AWS creates
 # itself the first time Data Lifecycle Manager is used. If your account already has
 # it, set this false or the first apply fails with EntityAlreadyExists.

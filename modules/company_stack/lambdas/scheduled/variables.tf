@@ -141,3 +141,9 @@ variable "memory_mb" {
   description = "Memory for the scheduled Lambda. See scheduled_lambda_memory_mb at the root."
   type        = number
 }
+
+variable "llm_model_env" {
+  description = "SIMPLE_MODEL, MEDIUM_MODEL and ADVANCED_MODEL, for the tiers that are set."
+  type        = map(string)
+  default     = {}
+}

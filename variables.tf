@@ -424,6 +424,25 @@ variable "scheduled_lambda_memory_mb" {
   }
 }
 
+variable "llm_models" {
+  description = "The Bedrock model behind each of the application's three tiers, overriding the defaults the image ships with. simple runs the sub-agents that query each connected source, medium the fallback and the summaries, advanced the investigation itself. Each is a Bedrock model or inference profile id in this region, such as eu.anthropic.claude-opus-4-5-20251101-v1:0, and must be enabled for the account. Unset tiers keep the image's default. Needs app_image_tag ewake-v0.196.0 or later; an older image ignores it."
+  type = object({
+    simple   = optional(string)
+    medium   = optional(string)
+    advanced = optional(string)
+  })
+  default  = {}
+  nullable = false
+
+  validation {
+    condition = alltrue([
+      for id in [var.llm_models.simple, var.llm_models.medium, var.llm_models.advanced] :
+      id == null || can(regex("^[a-z0-9][a-z0-9._-]*(:[0-9]+)?$", id))
+    ])
+    error_message = "Each llm_models entry must be a Bedrock model or inference profile id, such as eu.anthropic.claude-opus-4-5-20251101-v1:0."
+  }
+}
+
 variable "container_insights" {
   description = "Send ECS Container Insights metrics for this cluster. Off by default: it is billed per metric series and nothing in this deployment reads it. Per-task CPU and memory stay available for free under the AWS/ECS namespace either way. Turn it on if you want the per-container breakdown in the ECS console."
   type        = bool
