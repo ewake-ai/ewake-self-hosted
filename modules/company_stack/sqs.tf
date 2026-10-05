@@ -1,9 +1,12 @@
 resource "aws_sqs_queue" "lambda" {
   name = "${local.arn_prefix}-lambda"
-  # 6x the 900s Lambda timeout, per AWS's guidance for SQS-triggered functions. Equal to
-  # it left no buffer at all: a run that used its full budget released the message the
-  # instant it finished, so a redelivery could land while the agent was still working.
-  visibility_timeout_seconds = 5400
+  # The 900s Lambda timeout plus one minute. Lambda stops a run at 900s, so when the
+  # message reappears nothing is still working on it, and a run that timed out or failed
+  # is retried about a minute later. The minute covers the gap between receiving the
+  # message and the invocation starting; equal to the timeout left no margin for it.
+  # AWS's 6x guidance (5400s) suits batched or throttled consumers. With batch_size 1 it
+  # only made every retry wait 90 minutes.
+  visibility_timeout_seconds = 960
   message_retention_seconds  = 345600
 
   redrive_policy = jsonencode({
