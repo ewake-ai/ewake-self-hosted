@@ -52,6 +52,19 @@ variable "github_app_private_key" {
   }
 }
 
+variable "github_app_webhook_secret" {
+  description = "Webhook secret of that App, the \"Webhook secret\" field on its settings page. The deployment checks every webhook delivery from the App against it. Null for an App with no webhook."
+  type        = string
+  default     = null
+  sensitive   = true
+  nullable    = true
+
+  validation {
+    condition     = var.github_app_webhook_secret == null || trimspace(var.github_app_webhook_secret) != ""
+    error_message = "github_app_webhook_secret is blank. Pass null to run without a webhook — a blank string is almost always an unexpanded variable."
+  }
+}
+
 locals {
   # A list of argument *names*, and nonsensitive() because that is all it is: which arguments were
   # supplied is not what any of them contains. Without it the private key's marking spreads into
@@ -76,13 +89,19 @@ resource "terraform_data" "github_app_shape" {
         "Set all three to seed an App you already have, or none to register one from the dashboard."
       ])
     }
+
+    # The webhook secret is written into the App's own secret, which only exists when the App is set.
+    precondition {
+      condition     = nonsensitive(var.github_app_webhook_secret == null) || local.github_app_enabled
+      error_message = "github_app_webhook_secret needs the GitHub App: set github_app_client_id, github_app_slug and github_app_private_key too."
+    }
   }
 }
 
 resource "aws_secretsmanager_secret" "github_app" {
   count       = local.github_app_enabled ? 1 : 0
   name        = "${local.ssm_path}/github-app"
-  description = "Credentials of the GitHub App this deployment acts as (CLIENT_ID, APP_SLUG, APP_PRIVATE_KEY). Written from terraform variables; the dashboard resolves this secret at request time."
+  description = "Credentials of the GitHub App this deployment acts as (CLIENT_ID, APP_SLUG, APP_PRIVATE_KEY, and WEBHOOK_SECRET when set). Written from terraform variables; the dashboard resolves this secret at request time."
   tags        = local.tags
 
   # No recovery window, because the three variables are something you can unset. AWS's 30-day
@@ -98,9 +117,12 @@ resource "aws_secretsmanager_secret" "github_app" {
 resource "aws_secretsmanager_secret_version" "github_app" {
   count     = local.github_app_enabled ? 1 : 0
   secret_id = aws_secretsmanager_secret.github_app[0].id
-  secret_string = jsonencode({
-    CLIENT_ID       = var.github_app_client_id
-    APP_SLUG        = var.github_app_slug
-    APP_PRIVATE_KEY = var.github_app_private_key
-  })
+  secret_string = jsonencode(merge(
+    {
+      CLIENT_ID       = var.github_app_client_id
+      APP_SLUG        = var.github_app_slug
+      APP_PRIVATE_KEY = var.github_app_private_key
+    },
+    var.github_app_webhook_secret == null ? {} : { WEBHOOK_SECRET = var.github_app_webhook_secret }
+  ))
 }

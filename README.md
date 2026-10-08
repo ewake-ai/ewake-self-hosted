@@ -568,7 +568,11 @@ terraform apply
 ```
 
 Set all three or none. One or two fails the plan rather than half-enabling the
-feature. The private key reaches Terraform state, so the backend holding that
+feature.
+
+If the App has a webhook, also set `github_app_webhook_secret` to the value of
+its **Webhook secret** field, so the deployment can check each delivery. It is
+optional, and the plan refuses it without the three variables above. The private key reaches Terraform state, so the backend holding that
 state wants encryption and restricted reads — which is the reason to prefer
 registering from the dashboard.
 

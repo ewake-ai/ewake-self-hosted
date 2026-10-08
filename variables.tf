@@ -213,6 +213,14 @@ variable "github_app_private_key" {
   nullable    = true
 }
 
+variable "github_app_webhook_secret" {
+  description = "Webhook secret of that App, the \"Webhook secret\" field on its settings page. Optional, and only with the three variables above. Reaches terraform state like the private key."
+  type        = string
+  default     = null
+  sensitive   = true
+  nullable    = true
+}
+
 variable "azs" {
   description = "Availability zones to build subnets in, two or more, all in aws_region. Leave unset with existing_network: the zones are then whatever the supplied subnets are in, and nothing here is read."
   type        = list(string)
