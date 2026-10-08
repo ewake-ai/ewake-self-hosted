@@ -70,7 +70,7 @@ variable "orchestrator_internal_token_secret_arn" {
 }
 
 variable "admin_notify_url" {
-  description = "Optional URL that collects operational Slack notifications (admin, playground, sentinel). Null for this deployment: an absent value disables it and stops mounting the receiving routes."
+  description = "Optional URL that collects operational Slack notifications (admin, playground). Null for this deployment: an absent value disables it and stops mounting the receiving routes."
   type        = string
   default     = null
   nullable    = true
