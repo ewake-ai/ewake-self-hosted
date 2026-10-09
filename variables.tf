@@ -433,11 +433,11 @@ variable "scheduled_lambda_memory_mb" {
 }
 
 variable "llm_models" {
-  description = "The Bedrock model behind each of the application's three tiers, overriding the defaults the image ships with. simple runs the sub-agents that query each connected source, medium the fallback and the summaries, advanced the investigation itself. Each is a Bedrock model or inference profile id in this region, such as eu.anthropic.claude-opus-4-5-20251101-v1:0, and must be enabled for the account. Unset tiers keep the image's default. Needs app_image_tag ewake-v0.196.0 or later; an older image ignores it."
+  description = "The Bedrock model behind each of the application's three tiers, overriding the defaults set here. simple runs the sub-agents that query each connected source, medium the fallback and the summaries, advanced the investigation itself. Each is a Bedrock model or inference profile id in this region, such as eu.anthropic.claude-opus-4-5-20251101-v1:0, and must be enabled for the account. Unset tiers keep the default shown here. Needs app_image_tag ewake-v0.196.0 or later; an older image ignores it."
   type = object({
-    simple   = optional(string)
-    medium   = optional(string)
-    advanced = optional(string)
+    simple   = optional(string, "eu.anthropic.claude-haiku-5-5")
+    medium   = optional(string, "eu.anthropic.claude-sonnet-5-5")
+    advanced = optional(string, "eu.anthropic.claude-opus-5-5")
   })
   default  = {}
   nullable = false
