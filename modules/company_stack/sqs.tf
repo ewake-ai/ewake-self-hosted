@@ -9,6 +9,9 @@ resource "aws_sqs_queue" "lambda" {
   visibility_timeout_seconds = 960
   message_retention_seconds  = 345600
 
+  # The application sets its own delay before each retry of a failed run (1 min, 5 min, 90 min,
+  # then 6 h), one per receive this count allows. The 960 s above applies to a run that crashed
+  # or timed out before it could set one.
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.lambda_dlq.arn
     maxReceiveCount     = 5

@@ -130,6 +130,12 @@ resource "aws_lambda_event_source_mapping" "reactive_sqs" {
   function_name           = aws_lambda_function.reactive_processor.arn
   batch_size              = 1
   function_response_types = ["ReportBatchItemFailures"]
+
+  # The poller takes no message it cannot run. A throttled invoke would otherwise spend a receive
+  # each time the 960 s visibility timeout of the queue ends.
+  scaling_config {
+    maximum_concurrency = aws_lambda_function.reactive_processor.reserved_concurrent_executions
+  }
 }
 
 resource "aws_lambda_permission" "reactive_sqs" {

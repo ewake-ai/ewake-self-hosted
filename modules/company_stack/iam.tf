@@ -70,7 +70,7 @@ data "aws_iam_policy_document" "task" {
 
   statement {
     sid     = "SQSScopedToCompany"
-    actions = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:SendMessage"]
+    actions = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:SendMessage", "sqs:ChangeMessageVisibility"]
     resources = [
       "arn:aws:sqs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${local.arn_prefix}-*"
     ]
