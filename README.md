@@ -363,9 +363,14 @@ API Gateway that routes only these paths. Anything else returns 404:
 | ---- | --------- |
 | `POST /api/v1/slack/events` | Slack |
 | `POST /api/v1/slack/interactive` | Slack buttons and modals |
-| `POST /api/webhook/datadog/{token}` | Datadog monitors |
+| `POST /api/v1/alerts/{type}` | A hosted alerting vendor: Datadog, incident.io, FireHydrant, Sentry |
+| `POST /api/v1/alerts/{type}/{sourceId}` | A webhook set up on one on-call flow |
+| `POST /api/v1/github/events` | Your GitHub App, if it has a webhook |
 | `GET /android-chrome-512x512.png` | Slack, rendering a message block |
 | `POST /api/v1/events/deployment` | your CI |
+
+Alertmanager and a Grafana you run yourself send from inside your network, so
+the dashboard gives them the private address instead.
 
 The dashboard, the API and SSO are not routed. Reach those over your own
 network.
