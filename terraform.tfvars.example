@@ -20,6 +20,14 @@ company = {
   # all in that case. Adding a connector later switches login over.
   sso_connectors = ["google"]
 
+  # Keep the username and password form next to the SSO buttons, for the admin
+  # password above. Without a connector the form is always shown.
+  # password_login = true
+
+  # Email domains, besides `domain`, whose users may sign in with SSO. They sign
+  # in as members and never become admin. See README → "Configure SSO".
+  # allowed_email_domains = ["example-subsidiary.com"]
+
   # cloudwatchMcpSidecar lets the agent read CloudWatch logs and metrics. It adds
   # a permanent container to the dashboard task, so it is off unless you need it.
   # Connect the CloudWatch integration in the dashboard *before* setting this — a

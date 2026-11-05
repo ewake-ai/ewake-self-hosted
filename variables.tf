@@ -35,6 +35,12 @@ variable "company" {
     # while reactive keeps serving — a healthy-looking deployment nobody can sign in to.
     # Each redirect URI is this deployment's own host.
     sso_connectors = optional(list(string), [])
+    # Keeps the username and password form next to the SSO connectors, for the
+    # admin password in Secrets Manager. With no connector the form is always shown.
+    password_login = optional(bool, false)
+    # Email domains, besides `domain`, whose users may sign in with SSO. They never
+    # become admin.
+    allowed_email_domains = optional(list(string), [])
     features = optional(object({
       elasticsearch        = optional(bool, false)
       langsmith            = optional(bool, false)
@@ -51,6 +57,13 @@ variable "company" {
   validation {
     condition     = trimspace(var.company.domain) != ""
     error_message = "company.domain must be a non-empty email domain."
+  }
+
+  validation {
+    condition = alltrue([
+      for d in var.company.allowed_email_domains : can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", d))
+    ])
+    error_message = "company.allowed_email_domains takes lowercase domains such as \"example.com\", without \"@\"."
   }
 }
 

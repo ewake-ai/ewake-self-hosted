@@ -128,6 +128,13 @@ resource "aws_ecs_task_definition" "reactive" {
         var.orchestrator_url != null ? [
           { name = "EWAKE_ORCHESTRATOR_URL", value = var.orchestrator_url }
         ] : [],
+        # Both only when set, so a deployment that uses neither keeps its task definition.
+        length(var.company.allowed_email_domains) > 0 ? [
+          { name = "ALLOWED_EMAIL_DOMAINS", value = join(",", var.company.allowed_email_domains) }
+        ] : [],
+        var.company.password_login ? [
+          { name = "PASSWORD_LOGIN", value = "true" }
+        ] : [],
         local.reactive_container_env,
         local._admin_notify_env,
       [for name, id in local.llm_model_env : { name = name, value = id }])

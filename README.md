@@ -515,6 +515,35 @@ aws ecs update-service \
   --force-new-deployment
 ```
 
+**Keeping the password login.** Once a connector is set, the login page shows
+only the SSO buttons. To keep the username and password form next to them, for
+the admin password in Secrets Manager:
+
+```hcl
+company = {
+  # ...
+  password_login = true
+}
+```
+
+**Other email domains.** SSO admits users of `company.domain`. To also admit
+users of other domains, for example a subsidiary or a contractor, list them.
+Their users sign in as members and never become admin:
+
+```hcl
+company = {
+  # ...
+  allowed_email_domains = ["example-subsidiary.com"]
+}
+```
+
+For a Google connector, also add these domains to `hostedDomains` in its
+connector JSON, or Dex refuses them at sign-in.
+
+`allowed_email_domains` needs `app_image_tag` `ewake-v0.240.0` or later, and
+`password_login` needs `ewake-v0.243.0` or later. An older version ignores them.
+Apply, then redeploy as in step 3.
+
 ### Connect integrations
 
 Slack, Datadog, GitLab, Grafana, Prometheus, Loki, Jira, Linear and PagerDuty
