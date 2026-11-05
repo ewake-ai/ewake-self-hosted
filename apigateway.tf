@@ -1,6 +1,7 @@
 # A public door in front of a private ALB, for the third parties that have to reach
-# in: Slack's Events and interactivity callbacks, and the Datadog webhook. None of
-# them can route to an internal load balancer, and none of them can be asked to.
+# in: Slack's Events and interactivity callbacks, alerting vendors' webhooks, and your
+# GitHub App's deliveries. None of them can route to an internal load balancer, and
+# none of them can be asked to.
 #
 # Only the paths those callers actually use are routed. The dashboard, the API, SSO
 # and everything else stay unreachable from the internet — the point is a public
@@ -119,9 +120,13 @@ resource "aws_apigatewayv2_route" "public_inbound" {
     # Slack: events, and the interactivity callback for buttons and modals.
     "POST /api/v1/slack/events",
     "POST /api/v1/slack/interactive",
-    # Datadog monitors. The token in the path is the credential; the dashboard mints
-    # one per connected integration.
-    "POST /api/webhook/datadog/{token}",
+    # Alerts pushed by a hosted vendor (Datadog, incident.io, FireHydrant, Sentry, a
+    # generic webhook): the vendor's own webhook, and a flow's own URL. Each checks the
+    # credential the dashboard set up for that vendor or flow.
+    "POST /api/v1/alerts/{type}",
+    "POST /api/v1/alerts/{type}/{sourceId}",
+    # Deliveries from your own GitHub App, checked against its webhook secret.
+    "POST /api/v1/github/events",
     # Slack's own servers fetch this to render the loading icon in a message
     # block, so it is inbound rather than something a browser asks for.
     "GET /android-chrome-512x512.png",
