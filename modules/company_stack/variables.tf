@@ -12,6 +12,10 @@ variable "company" {
     # DEX_CONNECTORS array both containers read. Empty means no SSO: Dex refuses to start, so
     # the sidecar restart-loops while reactive keeps serving.
     sso_connectors = optional(list(string), [])
+    # Keeps the password form next to the SSO connectors. Without connectors it is always on.
+    password_login = optional(bool, false)
+    # Email domains, besides `domain`, whose users may sign in with SSO. They never become admin.
+    allowed_email_domains = optional(list(string), [])
     features = object({
       elasticsearch        = bool
       langsmith            = bool
