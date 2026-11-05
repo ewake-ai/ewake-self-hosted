@@ -370,6 +370,10 @@ API Gateway that routes only these paths. Anything else returns 404:
 The dashboard, the API and SSO are not routed. Reach those over your own
 network.
 
+With `alb_internal = true` and neither of the two set, `terraform plan` prints
+a warning: Slack and Datadog would be registered against the private host, and
+nothing they send would arrive. Ignore it if you connect neither.
+
 ## Using a database you already have
 
 By default this deployment creates its own RDS Postgres instance. If you
