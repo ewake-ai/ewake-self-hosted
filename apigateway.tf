@@ -23,6 +23,17 @@ locals {
   gateway_base_url = local.public_inbound_gateway ? "https://${aws_apigatewayv2_api.public_inbound[0].id}.execute-api.${var.aws_region}.amazonaws.com" : null
 }
 
+# A private load balancer with neither entry point still installs and serves the
+# dashboard, but Slack and Datadog are then registered against the private host, and
+# their deliveries never arrive. A warning, not an error: a deployment that connects
+# neither has nothing to fix.
+check "public_inbound_reachable" {
+  assert {
+    condition     = !var.alb_internal || var.public_inbound_gateway || var.public_inbound_base_url != null
+    error_message = "alb_internal = true with neither public_inbound_gateway nor public_inbound_base_url set: Slack and Datadog cannot reach this deployment, so Slack mentions, Slack buttons and Datadog alerts never arrive. Set public_inbound_gateway = true, or public_inbound_base_url to an entry point you run. See README, \"Inbound webhooks\". Ignore this if you connect neither Slack nor Datadog."
+  }
+}
+
 resource "aws_apigatewayv2_api" "public_inbound" {
   count = local.public_inbound_gateway ? 1 : 0
 
