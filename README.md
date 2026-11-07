@@ -679,6 +679,146 @@ Ambient agents are deployed as Lambdas, but their schedules are created from the
 dashboard, not by Terraform. A new install has no schedules. See
 [docs.ewake.ai](https://docs.ewake.ai/).
 
+## Monitoring
+
+### Infrastructure metrics
+
+The services this deployment runs on already publish their metrics to
+CloudWatch in your account. To read them from Prometheus, run the CloudWatch
+exporter, [YACE](https://github.com/prometheus-community/yet-another-cloudwatch-exporter)
+(`quay.io/prometheuscommunity/yet-another-cloudwatch-exporter`), and scrape it.
+
+Every resource this repository creates carries the tags `Project = ewake` and
+`Tenant = <tenant_name>`, so YACE finds them by tag. Replace `yourcompany` with
+your `tenant_name`:
+
+```yaml
+apiVersion: v1alpha1
+discovery:
+  jobs:
+    - type: AWS/ECS
+      regions: [eu-west-3]
+      searchTags: &ewake
+        - key: Project
+          value: ^ewake$
+        - key: Tenant
+          value: ^yourcompany$
+      period: 300
+      length: 300
+      metrics:
+        - name: CPUUtilization
+          statistics: [Average, Maximum]
+        - name: MemoryUtilization
+          statistics: [Average, Maximum]
+    - type: AWS/Lambda
+      regions: [eu-west-3]
+      searchTags: *ewake
+      period: 300
+      length: 300
+      metrics:
+        - name: Invocations
+          statistics: [Sum]
+        - name: Errors
+          statistics: [Sum]
+        - name: Throttles
+          statistics: [Sum]
+        - name: Duration
+          statistics: [Average, Maximum]
+        - name: ConcurrentExecutions
+          statistics: [Maximum]
+    - type: AWS/SQS
+      regions: [eu-west-3]
+      searchTags: *ewake
+      period: 300
+      length: 300
+      metrics:
+        - name: ApproximateNumberOfMessagesVisible
+          statistics: [Maximum]
+        - name: ApproximateAgeOfOldestMessage
+          statistics: [Maximum]
+        - name: NumberOfMessagesSent
+          statistics: [Sum]
+    - type: AWS/ApplicationELB
+      regions: [eu-west-3]
+      searchTags: *ewake
+      period: 300
+      length: 300
+      metrics:
+        - name: HTTPCode_Target_5XX_Count
+          statistics: [Sum]
+        - name: TargetResponseTime
+          statistics: [Average, p99]
+        - name: UnHealthyHostCount
+          statistics: [Maximum]
+    - type: AWS/RDS
+      regions: [eu-west-3]
+      searchTags: *ewake
+      period: 300
+      length: 300
+      metrics:
+        - name: CPUUtilization
+          statistics: [Average, Maximum]
+        - name: DatabaseConnections
+          statistics: [Maximum]
+        - name: FreeStorageSpace
+          statistics: [Minimum]
+        - name: FreeableMemory
+          statistics: [Minimum]
+    - type: AWS/EC2
+      regions: [eu-west-3]
+      searchTags: *ewake
+      period: 300
+      length: 300
+      metrics:
+        - name: CPUUtilization
+          statistics: [Average, Maximum]
+        - name: StatusCheckFailed
+          statistics: [Maximum]
+```
+
+The EC2 job covers the knowledge graph instance. The Lambda job covers the
+function that runs investigations and the one that runs scheduled agents. The
+SQS job covers the investigation queue and its dead letter queue.
+
+With [a database you already have](#using-a-database-you-already-have), the
+instance carries your tags, not these. Add a `searchTags` entry that matches it
+to the RDS job, or leave the job out.
+
+YACE needs these read only permissions:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "tag:GetResources",
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Start it with `-listen-address=:5000`, because the default listens on localhost
+only, and point a Prometheus scrape job at port 5000.
+
+These alerts catch most failures:
+
+| Alert | Metric | Means |
+| --- | --- | --- |
+| Messages in the dead letter queue | `ApproximateNumberOfMessagesVisible` on the `-lambda-dlq` queue above 0 | An investigation failed 5 times and was dropped |
+| Queue backing up | `ApproximateAgeOfOldestMessage` on the `-lambda` queue above 900 | Investigations wait longer than one run |
+| Dashboard unhealthy | `UnHealthyHostCount` above 0 for 10 minutes | The dashboard task fails its health check |
+| Knowledge graph down | `StatusCheckFailed` above 0 | The instance failed an EC2 status check |
+
+ECS publishes CPU and memory per service for free. `container_insights = true`
+adds a breakdown per container under `ECS/ContainerInsights`, billed per metric.
+
 ## Updating
 
 Check out the repository tag you want, set `app_image_tag` to the version its
