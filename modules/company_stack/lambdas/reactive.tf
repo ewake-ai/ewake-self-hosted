@@ -4,13 +4,6 @@
 locals {
   langsmith_secret = var.langsmith_enabled ? jsondecode(var.langsmith_secret_string) : null
 
-  # Gate on the object, never on the key: a condition over a sensitive value marks the whole env
-  # map sensitive.
-  braintrust_env = var.braintrust != null ? merge(
-    { BRAINTRUST_API_KEY = var.braintrust_api_key },
-    var.braintrust.project != null ? { BRAINTRUST_PROJECT = var.braintrust.project } : {},
-    var.braintrust.endpoint != null ? { BRAINTRUST_ENDPOINT = var.braintrust.endpoint } : {},
-  ) : {}
 
   reactive_datadog_env = var.datadog_enabled ? merge(var.datadog_base_env, {
     # Agentless because dd-trace force-disables remote config under IS_SERVERLESS, whatever the extension carries.
@@ -92,7 +85,7 @@ resource "aws_lambda_function" "reactive_processor" {
         LANGSMITH_PROJECT  = local.langsmith_secret["PROJECT"]
         LANGSMITH_API_KEY  = local.langsmith_secret["API_KEY"]
       } : {},
-      local.braintrust_env,
+      var.braintrust_env,
       var.elasticsearch_enabled ? {
         ELASTICSEARCH_URL     = var.elasticsearch_url
         ELASTICSEARCH_API_KEY = var.elasticsearch_api_key
