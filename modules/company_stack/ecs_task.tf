@@ -169,6 +169,10 @@ resource "aws_ecs_task_definition" "reactive" {
         var.jwt_secret_arn != null ? [
           { name = "JWT_SECRET", valueFrom = "${var.jwt_secret_arn}:SECRET::" },
         ] : [],
+        # Only when on, so a company without metrics keeps its task definition.
+        var.company.metrics ? [
+          { name = "METRICS_TOKEN", valueFrom = "${one(aws_secretsmanager_secret.app[*].arn)}:METRICS_TOKEN::" },
+        ] : [],
         local.orchestrator_secret_value_from != null ? [
           { name = "ORCHESTRATOR_SECRET", valueFrom = local.orchestrator_secret_value_from },
         ] : [],

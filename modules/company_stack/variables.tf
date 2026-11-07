@@ -14,6 +14,9 @@ variable "company" {
     sso_connectors = optional(list(string), [])
     # Keeps the password form next to the SSO connectors. Without connectors it is always on.
     password_login = optional(bool, false)
+    # Serves GET /metrics on the dashboard host, for a Prometheus scrape that presents the bearer
+    # token generated into the app secret. Off: the endpoint is a 404.
+    metrics = optional(bool, false)
     # The customer's own Braintrust, where agent traces go. The key is a plain-string secret the
     # customer creates; endpoint is only for a self-hosted Braintrust. Null sends traces nowhere.
     braintrust = optional(object({

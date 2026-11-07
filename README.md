@@ -819,6 +819,60 @@ These alerts catch most failures:
 ECS publishes CPU and memory per service for free. `container_insights = true`
 adds a breakdown per container under `ECS/ContainerInsights`, billed per metric.
 
+### Application metrics
+
+The dashboard can serve its own metrics in Prometheus format on `/metrics`:
+investigations, agent runs, tool calls, integration health and model tokens.
+Investigations run in Lambda, which Prometheus cannot scrape, but every run is
+recorded in the database, so this one endpoint covers them.
+
+1. Set `metrics = true` in `company` and apply. The apply generates a token
+   into the app secret and rolls the dashboard task.
+2. Read the token:
+
+   ```sh
+   aws secretsmanager get-secret-value \
+     --secret-id "$(terraform output -raw metrics_token_secret_arn)" \
+     --query SecretString --output text | jq -r .METRICS_TOKEN > ewake-metrics-token
+   ```
+
+3. Add a scrape job, with the host from `terraform output metrics_url`:
+
+   ```yaml
+   scrape_configs:
+     - job_name: ewake
+       scheme: https
+       scrape_interval: 60s
+       authorization:
+         credentials_file: /etc/prometheus/ewake-metrics-token
+       static_configs:
+         - targets: ["yourcompany.ewake.example.com"]
+   ```
+
+Without the token the endpoint answers 401, and with `metrics` off it answers
+404. It is served by the load balancer like the dashboard, so Prometheus needs
+the same network access to it. The public inbound gateway does not route it.
+Values are read from the database at most every 30 seconds.
+
+| Metric | Type | Labels |
+| --- | --- | --- |
+| `ewake_investigations_total` | counter | `task_type` |
+| `ewake_investigations_finished_total` | counter | `task_type`, `status` |
+| `ewake_investigations_in_progress` | gauge | `task_type` |
+| `ewake_investigations_not_started` | gauge | `task_type` |
+| `ewake_investigation_duration_seconds` | histogram | `task_type` |
+| `ewake_agent_runs_total` | counter | `state` |
+| `ewake_agent_runs_running` | gauge | |
+| `ewake_tool_calls_total` | counter | `status` |
+| `ewake_discovery_runs` | gauge | `mode`, `status` |
+| `ewake_integration_issues_open` | gauge | `source`, `severity` |
+| `ewake_integration_last_checked_timestamp_seconds` | gauge | `source` |
+| `ewake_llm_tokens_total` | counter | `model`, `type` |
+| `ewake_build_info` | gauge | `version` |
+
+The dashboard process also reports the standard `process_*` and `nodejs_*`
+metrics.
+
 ### Agent traces in Braintrust
 
 Ewake can send the trace of every agent run to your

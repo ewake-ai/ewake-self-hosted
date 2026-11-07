@@ -28,6 +28,9 @@ company = {
   # in as members and never become admin. See README → "Configure SSO".
   # allowed_email_domains = ["example-subsidiary.com"]
 
+  # Serve Prometheus metrics on /metrics. See README → "Application metrics".
+  # metrics = true
+
   # Send agent traces to your Braintrust. See README → "Agent traces in Braintrust".
   # braintrust = {
   #   api_key_secret_arn = "arn:aws:secretsmanager:eu-west-3:123456789012:secret:ewake/braintrust-api-key-AbCdEf"
