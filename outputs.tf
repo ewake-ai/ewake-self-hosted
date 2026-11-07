@@ -105,3 +105,13 @@ output "database_client_security_group_ids" {
     bootstrap = aws_security_group.bootstrap_lambda.id
   }
 }
+
+output "metrics_url" {
+  description = "The URL your Prometheus scrapes, with the token below as a bearer token. Null unless company.metrics is true."
+  value       = module.company.metrics_url
+}
+
+output "metrics_token_secret_arn" {
+  description = "The secret whose METRICS_TOKEN key is the bearer token for metrics_url. Null unless company.metrics is true."
+  value       = module.company.metrics_token_secret_arn
+}

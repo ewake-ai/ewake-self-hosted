@@ -23,6 +23,13 @@ data "aws_secretsmanager_secret_version" "langsmith" {
   secret_id = "langsmith"
 }
 
+# A Lambda's env cannot reference a secret, so the Lambdas get the customer's Braintrust key as a
+# value read here. The ECS task references the secret instead (ecs_task.tf).
+data "aws_secretsmanager_secret_version" "braintrust" {
+  count     = var.company.braintrust != null ? 1 : 0
+  secret_id = var.company.braintrust.api_key_secret_arn
+}
+
 # The knowledge-graph Lambda reads feature flags agentless, and the agentless source wants the key itself rather than the ARN every other consumer takes.
 data "aws_secretsmanager_secret_version" "datadog_api_key" {
   count     = !local.is_byoc && var.datadog_api_key_secret_arn != null ? 1 : 0
@@ -59,6 +66,14 @@ resource "random_password" "orchestrator_secret" {
 # deployment comes up with no login path at all. The RDS bootstrap Lambda hashes it onto the
 # system user; the plaintext lives only here, for an operator to read out of Secrets Manager.
 # No special characters: it gets pasted into a shell and then a form.
+# The bearer token a Prometheus scrape of /metrics presents. Letters and digits only: it is
+# pasted into a scrape config and sent in a header.
+resource "random_password" "metrics_token" {
+  count   = var.company.metrics ? 1 : 0
+  length  = 48
+  special = false
+}
+
 resource "random_password" "admin_password" {
   length  = 32
   special = false
@@ -83,10 +98,13 @@ resource "aws_secretsmanager_secret" "app" {
 resource "aws_secretsmanager_secret_version" "app" {
   count     = local.is_byoc ? 1 : 0
   secret_id = aws_secretsmanager_secret.app[0].id
-  secret_string = jsonencode({
-    ADMIN_PASSWORD      = random_password.admin_password.result
-    JWT_SECRET          = random_password.jwt_secret[0].result
-    DEX_CLIENT_SECRET   = random_password.dex_client_secret[0].result
-    ORCHESTRATOR_SECRET = random_password.orchestrator_secret[0].result
-  })
+  secret_string = jsonencode(merge(
+    {
+      ADMIN_PASSWORD      = random_password.admin_password.result
+      JWT_SECRET          = random_password.jwt_secret[0].result
+      DEX_CLIENT_SECRET   = random_password.dex_client_secret[0].result
+      ORCHESTRATOR_SECRET = random_password.orchestrator_secret[0].result
+    },
+    var.company.metrics ? { METRICS_TOKEN = random_password.metrics_token[0].result } : {}
+  ))
 }

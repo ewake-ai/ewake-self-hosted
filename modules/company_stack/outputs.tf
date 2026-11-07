@@ -20,3 +20,13 @@ output "db_credentials_secret_arn" {
 output "target_group_arn" {
   value = aws_lb_target_group.reactive.arn
 }
+
+output "metrics_url" {
+  description = "What a Prometheus scrape targets. Null unless company.metrics is on."
+  value       = var.company.metrics ? "${local.company_base_url}/metrics" : null
+}
+
+output "metrics_token_secret_arn" {
+  description = "The secret whose METRICS_TOKEN key is the scrape's bearer token. Null unless company.metrics is on."
+  value       = var.company.metrics ? one(aws_secretsmanager_secret.app[*].arn) : null
+}

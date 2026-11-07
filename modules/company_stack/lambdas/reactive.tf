@@ -4,6 +4,7 @@
 locals {
   langsmith_secret = var.langsmith_enabled ? jsondecode(var.langsmith_secret_string) : null
 
+
   reactive_datadog_env = var.datadog_enabled ? merge(var.datadog_base_env, {
     # Agentless because dd-trace force-disables remote config under IS_SERVERLESS, whatever the extension carries.
     DD_FEATURE_FLAGS_ENABLED                                              = "true"
@@ -84,6 +85,7 @@ resource "aws_lambda_function" "reactive_processor" {
         LANGSMITH_PROJECT  = local.langsmith_secret["PROJECT"]
         LANGSMITH_API_KEY  = local.langsmith_secret["API_KEY"]
       } : {},
+      var.braintrust_env,
       var.elasticsearch_enabled ? {
         ELASTICSEARCH_URL     = var.elasticsearch_url
         ELASTICSEARCH_API_KEY = var.elasticsearch_api_key

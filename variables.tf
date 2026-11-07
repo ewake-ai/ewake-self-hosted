@@ -41,6 +41,16 @@ variable "company" {
     # Email domains, besides `domain`, whose users may sign in with SSO. They never
     # become admin.
     allowed_email_domains = optional(list(string), [])
+    # Serves GET /metrics on the dashboard host, for your Prometheus. The scrape
+    # presents a bearer token generated into the app secret.
+    metrics = optional(bool, false)
+    # Sends agent traces to your Braintrust. The key is a plain-string secret you
+    # create in Secrets Manager. endpoint is only for a self-hosted Braintrust.
+    braintrust = optional(object({
+      api_key_secret_arn = string
+      project            = optional(string)
+      endpoint           = optional(string)
+    }))
     features = optional(object({
       elasticsearch        = optional(bool, false)
       langsmith            = optional(bool, false)

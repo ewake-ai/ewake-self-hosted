@@ -679,6 +679,239 @@ Ambient agents are deployed as Lambdas, but their schedules are created from the
 dashboard, not by Terraform. A new install has no schedules. See
 [docs.ewake.ai](https://docs.ewake.ai/).
 
+## Monitoring
+
+### Infrastructure metrics
+
+The services this deployment runs on already publish their metrics to
+CloudWatch in your account. To read them from Prometheus, run the CloudWatch
+exporter, [YACE](https://github.com/prometheus-community/yet-another-cloudwatch-exporter)
+(`quay.io/prometheuscommunity/yet-another-cloudwatch-exporter`), and scrape it.
+
+Every resource this repository creates carries the tags `Project = ewake` and
+`Tenant = <tenant_name>`, so YACE finds them by tag. Replace `yourcompany` with
+your `tenant_name`:
+
+```yaml
+apiVersion: v1alpha1
+discovery:
+  jobs:
+    - type: AWS/ECS
+      regions: [eu-west-3]
+      searchTags: &ewake
+        - key: Project
+          value: ^ewake$
+        - key: Tenant
+          value: ^yourcompany$
+      period: 300
+      length: 300
+      metrics:
+        - name: CPUUtilization
+          statistics: [Average, Maximum]
+        - name: MemoryUtilization
+          statistics: [Average, Maximum]
+    - type: AWS/Lambda
+      regions: [eu-west-3]
+      searchTags: *ewake
+      period: 300
+      length: 300
+      metrics:
+        - name: Invocations
+          statistics: [Sum]
+        - name: Errors
+          statistics: [Sum]
+        - name: Throttles
+          statistics: [Sum]
+        - name: Duration
+          statistics: [Average, Maximum]
+        - name: ConcurrentExecutions
+          statistics: [Maximum]
+    - type: AWS/SQS
+      regions: [eu-west-3]
+      searchTags: *ewake
+      period: 300
+      length: 300
+      metrics:
+        - name: ApproximateNumberOfMessagesVisible
+          statistics: [Maximum]
+        - name: ApproximateAgeOfOldestMessage
+          statistics: [Maximum]
+        - name: NumberOfMessagesSent
+          statistics: [Sum]
+    - type: AWS/ApplicationELB
+      regions: [eu-west-3]
+      searchTags: *ewake
+      period: 300
+      length: 300
+      metrics:
+        - name: HTTPCode_Target_5XX_Count
+          statistics: [Sum]
+        - name: TargetResponseTime
+          statistics: [Average, p99]
+        - name: UnHealthyHostCount
+          statistics: [Maximum]
+    - type: AWS/RDS
+      regions: [eu-west-3]
+      searchTags: *ewake
+      period: 300
+      length: 300
+      metrics:
+        - name: CPUUtilization
+          statistics: [Average, Maximum]
+        - name: DatabaseConnections
+          statistics: [Maximum]
+        - name: FreeStorageSpace
+          statistics: [Minimum]
+        - name: FreeableMemory
+          statistics: [Minimum]
+    - type: AWS/EC2
+      regions: [eu-west-3]
+      searchTags: *ewake
+      period: 300
+      length: 300
+      metrics:
+        - name: CPUUtilization
+          statistics: [Average, Maximum]
+        - name: StatusCheckFailed
+          statistics: [Maximum]
+```
+
+The EC2 job covers the knowledge graph instance. The Lambda job covers the
+function that runs investigations and the one that runs scheduled agents. The
+SQS job covers the investigation queue and its dead letter queue.
+
+With [a database you already have](#using-a-database-you-already-have), the
+instance carries your tags, not these. Add a `searchTags` entry that matches it
+to the RDS job, or leave the job out.
+
+YACE needs these read only permissions:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "tag:GetResources",
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Start it with `-listen-address=:5000`, because the default listens on localhost
+only, and point a Prometheus scrape job at port 5000.
+
+These alerts catch most failures:
+
+| Alert | Metric | Means |
+| --- | --- | --- |
+| Messages in the dead letter queue | `ApproximateNumberOfMessagesVisible` on the `-lambda-dlq` queue above 0 | An investigation failed 5 times and was dropped |
+| Queue backing up | `ApproximateAgeOfOldestMessage` on the `-lambda` queue above 900 | Investigations wait longer than one run |
+| Dashboard unhealthy | `UnHealthyHostCount` above 0 for 10 minutes | The dashboard task fails its health check |
+| Knowledge graph down | `StatusCheckFailed` above 0 | The instance failed an EC2 status check |
+
+ECS publishes CPU and memory per service for free. `container_insights = true`
+adds a breakdown per container under `ECS/ContainerInsights`, billed per metric.
+
+### Application metrics
+
+The dashboard can serve its own metrics in Prometheus format on `/metrics`:
+investigations, agent runs, tool calls, integration health and model tokens.
+Investigations run in Lambda, which Prometheus cannot scrape, but every run is
+recorded in the database, so this one endpoint covers them.
+
+1. Set `metrics = true` in `company` and apply. The apply generates a token
+   into the app secret and rolls the dashboard task.
+2. Read the token:
+
+   ```sh
+   aws secretsmanager get-secret-value \
+     --secret-id "$(terraform output -raw metrics_token_secret_arn)" \
+     --query SecretString --output text | jq -r .METRICS_TOKEN > ewake-metrics-token
+   ```
+
+3. Add a scrape job, with the host from `terraform output metrics_url`:
+
+   ```yaml
+   scrape_configs:
+     - job_name: ewake
+       scheme: https
+       scrape_interval: 60s
+       authorization:
+         credentials_file: /etc/prometheus/ewake-metrics-token
+       static_configs:
+         - targets: ["yourcompany.ewake.example.com"]
+   ```
+
+Without the token the endpoint answers 401, and with `metrics` off it answers
+404. It is served by the load balancer like the dashboard, so Prometheus needs
+the same network access to it. The public inbound gateway does not route it.
+Values are read from the database at most every 30 seconds.
+
+| Metric | Type | Labels |
+| --- | --- | --- |
+| `ewake_investigations_total` | counter | `task_type` |
+| `ewake_investigations_finished_total` | counter | `task_type`, `status` |
+| `ewake_investigations_in_progress` | gauge | `task_type` |
+| `ewake_investigations_not_started` | gauge | `task_type` |
+| `ewake_investigation_duration_seconds` | histogram | `task_type` |
+| `ewake_agent_runs_total` | counter | `state` |
+| `ewake_agent_runs_running` | gauge | |
+| `ewake_tool_calls_total` | counter | `status` |
+| `ewake_discovery_runs` | gauge | `mode`, `status` |
+| `ewake_integration_issues_open` | gauge | `source`, `severity` |
+| `ewake_integration_last_checked_timestamp_seconds` | gauge | `source` |
+| `ewake_llm_tokens_total` | counter | `model`, `type` |
+| `ewake_build_info` | gauge | `version` |
+
+The dashboard process also reports the standard `process_*` and `nodejs_*`
+metrics.
+
+### Agent traces in Braintrust
+
+Ewake can send the trace of every agent run to your
+[Braintrust](https://www.braintrust.dev/) project: each model call, tool call
+and step, with its inputs and outputs.
+
+1. Create an API key in Braintrust.
+2. Store it in Secrets Manager in this account, as a plain string:
+
+   ```sh
+   aws secretsmanager create-secret --name ewake/braintrust-api-key \
+     --secret-string "<your Braintrust API key>"
+   ```
+
+3. Add it to `company` and apply:
+
+   ```hcl
+   company = {
+     # ...
+     braintrust = {
+       api_key_secret_arn = "arn:aws:secretsmanager:eu-west-3:123456789012:secret:ewake/braintrust-api-key-AbCdEf"
+       project            = "ewake" # optional, defaults to "ewake"
+       # endpoint         = "https://braintrust.example.com" # only for a self-hosted Braintrust
+     }
+   }
+   ```
+
+The apply updates the dashboard task and both Lambdas. The next run is traced.
+
+Things to know:
+
+- Traces carry prompts, tool inputs and tool outputs, so data from your
+  integrations reaches Braintrust.
+- Encrypt the secret with the default `aws/secretsmanager` key. With your own
+  KMS key, the task role also needs `kms:Decrypt` on it.
+- The Lambdas receive the key as an environment variable, so it is readable in
+  their configuration by anyone who can read the functions.
+- A few short model calls made outside the agent run are not traced.
+
 ## Updating
 
 Check out the repository tag you want, set `app_image_tag` to the version its

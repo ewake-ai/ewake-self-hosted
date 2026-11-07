@@ -173,3 +173,9 @@ variable "llm_model_env" {
   type        = map(string)
   default     = {}
 }
+
+variable "braintrust_env" {
+  description = "BRAINTRUST_API_KEY, BRAINTRUST_PROJECT and BRAINTRUST_ENDPOINT, computed once by the parent. Empty sends traces nowhere. Not marked sensitive here: the key carries its own mark, so a plan hides only that value."
+  type        = map(string)
+  default     = {}
+}
