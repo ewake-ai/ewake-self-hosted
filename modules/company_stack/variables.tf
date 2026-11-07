@@ -14,6 +14,13 @@ variable "company" {
     sso_connectors = optional(list(string), [])
     # Keeps the password form next to the SSO connectors. Without connectors it is always on.
     password_login = optional(bool, false)
+    # The customer's own Braintrust, where agent traces go. The key is a plain-string secret the
+    # customer creates; endpoint is only for a self-hosted Braintrust. Null sends traces nowhere.
+    braintrust = optional(object({
+      api_key_secret_arn = string
+      project            = optional(string)
+      endpoint           = optional(string)
+    }))
     # Email domains, besides `domain`, whose users may sign in with SSO. They never become admin.
     allowed_email_domains = optional(list(string), [])
     features = object({
@@ -27,6 +34,16 @@ variable "company" {
   validation {
     condition     = trimspace(var.company.domain) != ""
     error_message = "company.domain must be a non-empty email domain."
+  }
+
+  validation {
+    condition     = var.company.braintrust == null || can(regex("^arn:aws[a-z-]*:secretsmanager:", var.company.braintrust.api_key_secret_arn))
+    error_message = "company.braintrust.api_key_secret_arn must be a Secrets Manager secret ARN."
+  }
+
+  validation {
+    condition     = try(var.company.braintrust.endpoint, null) == null || startswith(try(var.company.braintrust.endpoint, ""), "https://")
+    error_message = "company.braintrust.endpoint must be an https:// URL."
   }
 }
 
@@ -293,9 +310,9 @@ locals {
     Company = var.company.name
   })
 
-  # Optional external secrets the task role needs read on. `compact` drops absent
-  # ones — here every entry is null, and iam.tf's dynamic block then omits the
-  # whole SharedSecretsReadOnly statement.
+  # Optional external secrets the task role needs read on, such as the Braintrust key.
+  # `compact` drops absent ones, and iam.tf's dynamic block omits the whole
+  # SharedSecretsReadOnly statement when none is left.
   shared_secret_arns = compact([
     one(data.aws_secretsmanager_secret.grafana[*].arn),
     one(data.aws_secretsmanager_secret.langsmith[*].arn),
@@ -306,6 +323,7 @@ locals {
     var.jwt_secret_arn,
     var.slack_secret_arn,
     var.dex_secret_arn,
+    try(var.company.braintrust.api_key_secret_arn, null),
   ])
 }
 

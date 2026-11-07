@@ -19,6 +19,12 @@ locals {
 # so we don't carry a thin scheduled.tf wrapper inside lambdas/.
 
 locals {
+  # What the Lambdas need of company.braintrust: the key arrives on its own, as a sensitive value.
+  braintrust_lambda = var.company.braintrust != null ? {
+    project  = var.company.braintrust.project
+    endpoint = var.company.braintrust.endpoint
+  } : null
+
   datadog_lambda_base_env = !local.is_byoc ? {
     DD_API_KEY_SECRET_ARN      = var.datadog_api_key_secret_arn
     DD_SITE                    = "datadoghq.eu"
@@ -62,6 +68,8 @@ module "lambdas" {
   sqs_queue_arn             = aws_sqs_queue.lambda.arn
   langsmith_enabled         = !local.is_byoc
   langsmith_secret_string   = one(data.aws_secretsmanager_secret_version.langsmith[*].secret_string)
+  braintrust                = local.braintrust_lambda
+  braintrust_api_key        = one(data.aws_secretsmanager_secret_version.braintrust[*].secret_string)
   # Header on reactive-Lambda self-calls to the internal API; without it a finished run cannot report its result.
   # Ternary, not coalesce — coalesce(null, "") throws.
   orchestrator_secret = local.is_byoc ? random_password.orchestrator_secret[0].result : (
@@ -100,6 +108,8 @@ module "scheduled_lambdas" {
   datadog_forwarder_arn      = var.datadog_forwarder_arn
   langsmith_enabled          = !local.is_byoc
   langsmith_secret_string    = one(data.aws_secretsmanager_secret_version.langsmith[*].secret_string)
+  braintrust                 = local.braintrust_lambda
+  braintrust_api_key         = one(data.aws_secretsmanager_secret_version.braintrust[*].secret_string)
   datadog_api_key            = one(data.aws_secretsmanager_secret_version.datadog_api_key[*].secret_string)
   lambda_bundle_image_uri    = var.lambda_bundle_image_uri
   memory_mb                  = var.scheduled_lambda_memory_mb

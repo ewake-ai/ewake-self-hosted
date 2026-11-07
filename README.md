@@ -819,6 +819,45 @@ These alerts catch most failures:
 ECS publishes CPU and memory per service for free. `container_insights = true`
 adds a breakdown per container under `ECS/ContainerInsights`, billed per metric.
 
+### Agent traces in Braintrust
+
+Ewake can send the trace of every agent run to your
+[Braintrust](https://www.braintrust.dev/) project: each model call, tool call
+and step, with its inputs and outputs.
+
+1. Create an API key in Braintrust.
+2. Store it in Secrets Manager in this account, as a plain string:
+
+   ```sh
+   aws secretsmanager create-secret --name ewake/braintrust-api-key \
+     --secret-string "<your Braintrust API key>"
+   ```
+
+3. Add it to `company` and apply:
+
+   ```hcl
+   company = {
+     # ...
+     braintrust = {
+       api_key_secret_arn = "arn:aws:secretsmanager:eu-west-3:123456789012:secret:ewake/braintrust-api-key-AbCdEf"
+       project            = "ewake" # optional, defaults to "ewake"
+       # endpoint         = "https://braintrust.example.com" # only for a self-hosted Braintrust
+     }
+   }
+   ```
+
+The apply updates the dashboard task and both Lambdas. The next run is traced.
+
+Things to know:
+
+- Traces carry prompts, tool inputs and tool outputs, so data from your
+  integrations reaches Braintrust.
+- Encrypt the secret with the default `aws/secretsmanager` key. With your own
+  KMS key, the task role also needs `kms:Decrypt` on it.
+- The Lambdas receive the key as an environment variable, so it is readable in
+  their configuration by anyone who can read the functions.
+- A few short model calls made outside the agent run are not traced.
+
 ## Updating
 
 Check out the repository tag you want, set `app_image_tag` to the version its

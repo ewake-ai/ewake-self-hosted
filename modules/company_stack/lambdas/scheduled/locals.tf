@@ -16,6 +16,14 @@ locals {
     LANGSMITH_API_KEY  = local.langsmith_secret["API_KEY"]
   } : {}
 
+  # Gate on the object, never on the key: a condition over a sensitive value marks the whole env
+  # map sensitive.
+  braintrust_env = var.braintrust != null ? merge(
+    { BRAINTRUST_API_KEY = var.braintrust_api_key },
+    var.braintrust.project != null ? { BRAINTRUST_PROJECT = var.braintrust.project } : {},
+    var.braintrust.endpoint != null ? { BRAINTRUST_ENDPOINT = var.braintrust.endpoint } : {},
+  ) : {}
+
   # Shared env vars across the scheduled Lambdas. DD_SERVICE is set per-Lambda
   # in each <lambda>.tf.
   scheduled_lambda_env_common = merge({
@@ -45,7 +53,7 @@ locals {
     # here — and without it the survey treats the estate as having no connected region and skips
     # every run.
     CLOUDWATCH_MCP_SERVER_URL = var.cloudwatch_mcp_url
-  } : {}, var.datadog_base_env, local.langsmith_env, var.llm_model_env)
+  } : {}, var.datadog_base_env, local.langsmith_env, local.braintrust_env, var.llm_model_env)
 
   # Agentless because this is the one runtime with neither an agent nor an extension to carry remote config.
   # Gated on the bool, never on the key: a condition over a sensitive value marks the whole env map sensitive.

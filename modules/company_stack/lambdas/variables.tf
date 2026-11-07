@@ -173,3 +173,19 @@ variable "llm_model_env" {
   type        = map(string)
   default     = {}
 }
+
+variable "braintrust" {
+  description = "The customer's own Braintrust, where agent traces go. Null sends them nowhere."
+  type = object({
+    project  = optional(string)
+    endpoint = optional(string)
+  })
+  default = null
+}
+
+variable "braintrust_api_key" {
+  description = "The Braintrust API key, read from the customer's secret. Null whenever braintrust is."
+  type        = string
+  sensitive   = true
+  default     = null
+}

@@ -128,6 +128,13 @@ resource "aws_ecs_task_definition" "reactive" {
         var.orchestrator_url != null ? [
           { name = "EWAKE_ORCHESTRATOR_URL", value = var.orchestrator_url }
         ] : [],
+        # Only when set, so a deployment without Braintrust keeps its task definition.
+        var.company.braintrust != null ? [
+          for name, value in {
+            BRAINTRUST_PROJECT  = var.company.braintrust.project
+            BRAINTRUST_ENDPOINT = var.company.braintrust.endpoint
+          } : { name = name, value = value } if value != null
+        ] : [],
         # Both only when set, so a deployment that uses neither keeps its task definition.
         length(var.company.allowed_email_domains) > 0 ? [
           { name = "ALLOWED_EMAIL_DOMAINS", value = join(",", var.company.allowed_email_domains) }
@@ -164,6 +171,10 @@ resource "aws_ecs_task_definition" "reactive" {
         ] : [],
         local.orchestrator_secret_value_from != null ? [
           { name = "ORCHESTRATOR_SECRET", valueFrom = local.orchestrator_secret_value_from },
+        ] : [],
+        # A plain-string secret, so the whole value is the key.
+        var.company.braintrust != null ? [
+          { name = "BRAINTRUST_API_KEY", valueFrom = var.company.braintrust.api_key_secret_arn },
         ] : [],
         var.notion_secret_arn != null ? [
           { name = "NOTION_CLIENT_ID", valueFrom = "${var.notion_secret_arn}:CLIENT_ID::" },

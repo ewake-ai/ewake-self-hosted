@@ -23,6 +23,13 @@ data "aws_secretsmanager_secret_version" "langsmith" {
   secret_id = "langsmith"
 }
 
+# A Lambda's env cannot reference a secret, so the Lambdas get the customer's Braintrust key as a
+# value read here. The ECS task references the secret instead (ecs_task.tf).
+data "aws_secretsmanager_secret_version" "braintrust" {
+  count     = var.company.braintrust != null ? 1 : 0
+  secret_id = var.company.braintrust.api_key_secret_arn
+}
+
 # The knowledge-graph Lambda reads feature flags agentless, and the agentless source wants the key itself rather than the ARN every other consumer takes.
 data "aws_secretsmanager_secret_version" "datadog_api_key" {
   count     = !local.is_byoc && var.datadog_api_key_secret_arn != null ? 1 : 0
