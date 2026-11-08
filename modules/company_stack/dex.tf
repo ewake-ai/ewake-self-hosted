@@ -131,20 +131,6 @@ resource "aws_secretsmanager_secret_version" "sso_connector" {
   }
 }
 
-resource "aws_secretsmanager_secret" "company_sso" {
-  name = "${local.ssm_path}/sso"
-  tags = local.tags
-}
-
-resource "aws_secretsmanager_secret_version" "company_sso" {
-  secret_id     = aws_secretsmanager_secret.company_sso.id
-  secret_string = "[]"
-
-  lifecycle {
-    ignore_changes = [secret_string]
-  }
-}
-
 # Read back rather than kept from the resource: the resource holds the placeholder, and
 # ignore_changes means terraform never learns what onboarding wrote. This is the only way to
 # assemble the array, and it is why the values land in state — see the note on
