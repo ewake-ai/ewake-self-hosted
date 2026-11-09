@@ -41,6 +41,13 @@ variable "company" {
     # Email domains, besides `domain`, whose users may sign in with SSO. They never
     # become admin.
     allowed_email_domains = optional(list(string), [])
+    # Your own Braintrust project, where agent traces go. See README → "Agent traces
+    # in Braintrust". Unset sends traces nowhere.
+    braintrust = optional(object({
+      api_key_secret_arn = string
+      project            = optional(string)
+      app_url            = optional(string)
+    }))
     features = optional(object({
       elasticsearch        = optional(bool, false)
       langsmith            = optional(bool, false)

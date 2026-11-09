@@ -10,6 +10,12 @@ Always run `terraform plan` first and read it. Anything that destroys or
 replaces RDS, the Neo4j volume or the load balancer needs attention before you
 continue. Contact Ewake if the plan does.
 
+## Nothing to do: agent traces in Braintrust
+
+A new opt-in feature. It stays off unless you set `company.braintrust`, and an
+existing deployment plans and applies with no change. README → "Agent traces in
+Braintrust" covers what it does and what it needs.
+
 ## Container Insights is now off unless you ask for it
 
 Applies to any deployment first applied before this release. One apply, no manual

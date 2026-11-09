@@ -6,6 +6,13 @@ locals {
     MEDIUM_MODEL   = var.llm_models.medium
     ADVANCED_MODEL = var.llm_models.advanced
   } : name => id if id != null }
+
+  # The ARN, not the key: the Lambda reads the key at run time, so no env and no state holds it.
+  braintrust_lambda_env = var.company.braintrust != null ? merge(
+    { BRAINTRUST_API_KEY_SECRET_ARN = var.company.braintrust.api_key_secret_arn },
+    var.company.braintrust.project != null ? { BRAINTRUST_PROJECT = var.company.braintrust.project } : {},
+    var.company.braintrust.app_url != null ? { BRAINTRUST_APP_URL = var.company.braintrust.app_url } : {},
+  ) : {}
 }
 
 # Lambdas owned by company_stack.
@@ -41,6 +48,7 @@ module "lambdas" {
   company_base_url          = local.company_base_url
   reactive_lambda_memory_mb = var.reactive_lambda_memory_mb
   llm_model_env             = local.llm_model_env
+  braintrust_env            = local.braintrust_lambda_env
   arn_prefix                = local.arn_prefix
   ssm_path                  = local.ssm_path
   task_role_arn             = aws_iam_role.task.arn
@@ -104,6 +112,7 @@ module "scheduled_lambdas" {
   lambda_bundle_image_uri    = var.lambda_bundle_image_uri
   memory_mb                  = var.scheduled_lambda_memory_mb
   llm_model_env              = local.llm_model_env
+  braintrust_env             = local.braintrust_lambda_env
   lambda_queue_url           = aws_sqs_queue.lambda.url
   log_clustering_sidecar_url = local.log_clustering_sidecar_url
   cloudwatch_mcp_url         = local.cloudwatch_mcp_url
