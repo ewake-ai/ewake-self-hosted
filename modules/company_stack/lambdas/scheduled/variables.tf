@@ -147,3 +147,9 @@ variable "llm_model_env" {
   type        = map(string)
   default     = {}
 }
+
+variable "braintrust_env" {
+  description = "BRAINTRUST_API_KEY_SECRET_ARN, BRAINTRUST_PROJECT and BRAINTRUST_APP_URL, computed once by the parent. Empty sends traces nowhere."
+  type        = map(string)
+  default     = {}
+}

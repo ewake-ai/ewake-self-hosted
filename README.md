@@ -673,6 +673,97 @@ Two requirements:
 `CloudWatchReadOnlyAccess` and `CloudWatchLogsReadOnlyAccess` are enough to
 attach to it.
 
+### Agent traces in Braintrust
+
+Ewake can send a trace of every agent run to a Braintrust project you own, with
+your own API key. It is off by default. Without it, the deployment traces no
+agent run.
+
+It needs `app_image_tag` `ewake-v0.259.0` or later. An older version ignores it.
+
+1. Create an API key in Braintrust.
+2. Store it in Secrets Manager in this account, as a plain string, not as JSON:
+
+   ```sh
+   aws secretsmanager create-secret \
+     --name ewake/braintrust-api-key \
+     --secret-string "$BRAINTRUST_API_KEY" \
+     --query ARN --output text
+   ```
+
+3. Set the ARN it prints, and apply:
+
+   ```hcl
+   company = {
+     # ...
+     braintrust = {
+       api_key_secret_arn = "arn:aws:secretsmanager:eu-west-3:123456789012:secret:ewake/braintrust-api-key-AbCdEf"
+       project            = "ewake" # optional, default "ewake"
+     }
+   }
+   ```
+
+The plan changes the environment of the two Lambdas that run agents, and gives
+the task role read access to that one secret. Terraform reads only the ARN. The
+key is in no environment variable and not in the Terraform state: each Lambda
+reads it from Secrets Manager before its first run.
+
+`project` is the Braintrust project the traces go to. Braintrust creates it on
+the first trace if it does not exist.
+
+`app_url` is the address of the Braintrust app your users sign in to. Leave it
+unset when they sign in at `https://www.braintrust.dev`, even when your
+Braintrust data plane is self-hosted: after sign-in, the app gives the
+deployment the address of your data plane. Set it only when the app itself runs
+on your own host:
+
+```hcl
+braintrust = {
+  api_key_secret_arn = "arn:aws:secretsmanager:..."
+  app_url            = "https://braintrust.example.com"
+}
+```
+
+**What the traces carry.** One trace is one agent run. It holds every sub-agent
+run, every model call with its full prompt and response, every tool call with
+its input and output, the token counts, and the errors. Tool output is what the
+agent read from your integrations: log lines, metrics, code, tickets and
+messages. The deployment redacts nothing, so treat the Braintrust project as
+holding the same data as those integrations. The deployment does not trace the
+few model calls outside an agent run, such as the classification of a Slack
+message.
+
+**Requirements.**
+
+- The Lambdas reach Braintrust from the private subnets. A VPC with no internet
+  route needs NAT gateways (see [If the VPC has no way out](#if-the-vpc-has-no-way-out)),
+  unless your Braintrust data plane is reachable inside your network.
+- A secret encrypted with the default `aws/secretsmanager` key needs nothing
+  more. With a customer-managed KMS key, allow the task role,
+  `arn:aws:iam::<account>:role/<tenant_name>-<company.name>-task`, to use
+  `kms:Decrypt` on it.
+
+When a Lambda cannot read the secret, the run completes without a trace in
+Braintrust, and the Lambda logs `Failed to read the key of a tracing exporter`.
+The next run reads the secret again.
+
+A Lambda reads the key once per container and keeps it. After you rotate the
+key, a container that is already running uses the old key until AWS replaces
+it. Keep the old key valid until then, or replace every container at once with
+a configuration update of both functions:
+
+```sh
+for fn in reactive scheduled; do
+  aws lambda update-function-configuration \
+    --function-name "<tenant_name>-<company.name>-$fn" \
+    --description "Braintrust key rotated"
+done
+```
+
+The next `terraform plan` shows the description change and sets it back.
+
+To turn it off, remove the `braintrust` block and apply.
+
 ### Schedule the ambient agents
 
 Ambient agents are deployed as Lambdas, but their schedules are created from the
