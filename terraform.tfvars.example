@@ -28,6 +28,15 @@ company = {
   # in as members and never become admin. See README → "Configure SSO".
   # allowed_email_domains = ["example-subsidiary.com"]
 
+  # Send a trace of every agent run to your own Braintrust project. The key is a
+  # plain-string secret in this account's Secrets Manager. See README → "Agent
+  # traces in Braintrust".
+  # braintrust = {
+  #   api_key_secret_arn = "arn:aws:secretsmanager:eu-west-3:123456789012:secret:ewake/braintrust-api-key-AbCdEf"
+  #   project            = "ewake"                          # optional, default "ewake"
+  #   app_url            = "https://braintrust-api.example.com" # optional, see README
+  # }
+
   # cloudwatchMcpSidecar lets the agent read CloudWatch logs and metrics. It adds
   # a permanent container to the dashboard task, so it is off unless you need it.
   # Connect the CloudWatch integration in the dashboard *before* setting this — a

@@ -16,6 +16,13 @@ variable "company" {
     password_login = optional(bool, false)
     # Email domains, besides `domain`, whose users may sign in with SSO. They never become admin.
     allowed_email_domains = optional(list(string), [])
+    # The customer's own Braintrust, where agent traces go. The key is a plain-string secret the
+    # customer creates. app_url is the data plane API URL, only when the SDK must reach it alone.
+    braintrust = optional(object({
+      api_key_secret_arn = string
+      project            = optional(string)
+      app_url            = optional(string)
+    }))
     features = object({
       elasticsearch        = bool
       langsmith            = bool
@@ -27,6 +34,17 @@ variable "company" {
   validation {
     condition     = trimspace(var.company.domain) != ""
     error_message = "company.domain must be a non-empty email domain."
+  }
+
+  validation {
+    condition     = var.company.braintrust == null || can(regex("^arn:aws[a-z-]*:secretsmanager:", var.company.braintrust.api_key_secret_arn))
+    error_message = "company.braintrust.api_key_secret_arn must be a Secrets Manager secret ARN."
+  }
+
+  validation {
+    # A conditional, not ||: older Terraform evaluates both sides of ||, and startswith(null) fails.
+    condition     = try(var.company.braintrust.app_url, null) == null ? true : startswith(var.company.braintrust.app_url, "https://")
+    error_message = "company.braintrust.app_url must be an https:// URL."
   }
 }
 
@@ -306,6 +324,7 @@ locals {
     var.jwt_secret_arn,
     var.slack_secret_arn,
     var.dex_secret_arn,
+    try(var.company.braintrust.api_key_secret_arn, null),
   ])
 }
 
