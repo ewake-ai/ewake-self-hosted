@@ -34,7 +34,7 @@ company = {
   # braintrust = {
   #   api_key_secret_arn = "arn:aws:secretsmanager:eu-west-3:123456789012:secret:ewake/braintrust-api-key-AbCdEf"
   #   project            = "ewake"                          # optional, default "ewake"
-  #   app_url            = "https://braintrust.example.com" # optional, see README
+  #   app_url            = "https://braintrust-api.example.com" # optional, see README
   # }
 
   # cloudwatchMcpSidecar lets the agent read CloudWatch logs and metrics. It adds
