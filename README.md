@@ -680,7 +680,8 @@ your own API key. It is off by default. Without it, the deployment traces no
 agent run.
 
 1. Create an API key in Braintrust.
-2. Store it in Secrets Manager in this account, as a plain string, not as JSON:
+2. Store it in Secrets Manager in this account and in `aws_region`, as a plain
+   string, not as JSON. The Lambdas read it in their own region only:
 
    ```sh
    aws secretsmanager create-secret \
