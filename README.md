@@ -710,17 +710,29 @@ reads it from Secrets Manager before its first run.
 `project` is the Braintrust project the traces go to. Braintrust creates it on
 the first trace if it does not exist.
 
-`app_url` is the address of the Braintrust app your users sign in to. Leave it
-unset when they sign in at `https://www.braintrust.dev`, even when your
-Braintrust data plane is self-hosted: after sign-in, the app gives the
-deployment the address of your data plane. Set it only when the app itself runs
-on your own host:
+Leave `app_url` unset in the usual case. The deployment then signs in at
+`https://www.braintrust.dev` and sends the traces to the data plane of your
+Braintrust organization, whether Braintrust runs it or you do.
+
+Set `app_url` only when you host the data plane and the deployment must reach
+it alone, with no call to `www.braintrust.dev`. Use your data plane's API URL,
+from **Settings → Data plane** in Braintrust:
 
 ```hcl
 braintrust = {
   api_key_secret_arn = "arn:aws:secretsmanager:..."
-  app_url            = "https://braintrust.example.com"
+  app_url            = "https://braintrust-api.example.com"
 }
+```
+
+Your data plane must then answer the sign-in for Braintrust. Braintrust's
+[networking guide](https://docs.braintrust.dev/admin/self-hosting/configure/networking)
+covers this in "Constrain SDKs to the data plane". To check it, this request
+must return your organization:
+
+```sh
+curl -X POST "https://braintrust-api.example.com/api/apikey/login" \
+  -H "Authorization: Bearer $BRAINTRUST_API_KEY"
 ```
 
 **What the traces carry.** One trace is one agent run. It holds every sub-agent
@@ -736,7 +748,7 @@ message.
 
 - The Lambdas reach Braintrust from the private subnets. A VPC with no internet
   route needs NAT gateways (see [If the VPC has no way out](#if-the-vpc-has-no-way-out)),
-  unless your Braintrust data plane is reachable inside your network.
+  unless `app_url` points at a data plane that is reachable inside your network.
 - A secret encrypted with the default `aws/secretsmanager` key needs nothing
   more. With a customer-managed KMS key, allow the task role,
   `arn:aws:iam::<account>:role/<tenant_name>-<company.name>-task`, to use

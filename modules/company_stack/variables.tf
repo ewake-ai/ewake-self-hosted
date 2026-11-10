@@ -17,7 +17,7 @@ variable "company" {
     # Email domains, besides `domain`, whose users may sign in with SSO. They never become admin.
     allowed_email_domains = optional(list(string), [])
     # The customer's own Braintrust, where agent traces go. The key is a plain-string secret the
-    # customer creates. app_url is only for a Braintrust app that is not Braintrust's own.
+    # customer creates. app_url is the data plane API URL, only when the SDK must reach it alone.
     braintrust = optional(object({
       api_key_secret_arn = string
       project            = optional(string)
