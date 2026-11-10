@@ -679,8 +679,6 @@ Ewake can send a trace of every agent run to a Braintrust project you own, with
 your own API key. It is off by default. Without it, the deployment traces no
 agent run.
 
-It needs `app_image_tag` `ewake-v0.259.0` or later. An older version ignores it.
-
 1. Create an API key in Braintrust.
 2. Store it in Secrets Manager in this account, as a plain string, not as JSON:
 
