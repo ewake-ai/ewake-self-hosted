@@ -742,7 +742,7 @@ message.
   `kms:Decrypt` on it.
 
 When a Lambda cannot read the secret, the run completes without a trace in
-Braintrust, and the Lambda logs `Failed to read the key of a tracing exporter`.
+Braintrust, and the Lambda logs `Failed to register a tracing exporter`.
 The next run reads the secret again.
 
 A Lambda reads the key once per container and keeps it. After you rotate the
