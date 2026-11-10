@@ -42,7 +42,8 @@ variable "company" {
   }
 
   validation {
-    condition     = try(var.company.braintrust.app_url, null) == null || startswith(try(var.company.braintrust.app_url, ""), "https://")
+    # A conditional, not ||: older Terraform evaluates both sides of ||, and startswith(null) fails.
+    condition     = try(var.company.braintrust.app_url, null) == null ? true : startswith(var.company.braintrust.app_url, "https://")
     error_message = "company.braintrust.app_url must be an https:// URL."
   }
 }
