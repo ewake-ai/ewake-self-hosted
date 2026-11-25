@@ -33,6 +33,29 @@ locals {
     DD_SERVERLESS_LOGS_ENABLED = "true"
     DD_ENV                     = "production"
   } : {}
+
+  # What each Lambda reads from Secrets Manager at cold start. A value is a reference in the
+  # format of the ECS valueFrom, so the function environment and terraform state hold the ARN
+  # of a secret and never what is in it.
+  lambda_secret_env = merge(
+    {
+      POSTGRES_PASSWORD = "${aws_secretsmanager_secret.company_db.arn}:password::"
+      NEO4J_PASSWORD    = aws_secretsmanager_secret.company_neo4j_password.arn
+    },
+    # Header on the Lambda's calls to the internal API of its own reactive server. Without it a
+    # finished run cannot report its result.
+    local.orchestrator_secret_value_from != null ? {
+      ORCHESTRATOR_SECRET = local.orchestrator_secret_value_from
+    } : {},
+    local.is_byoc ? {} : {
+      LANGSMITH_ENDPOINT = "${one(data.aws_secretsmanager_secret.langsmith[*].arn)}:ENDPOINT::"
+      LANGSMITH_PROJECT  = "${one(data.aws_secretsmanager_secret.langsmith[*].arn)}:PROJECT::"
+      LANGSMITH_API_KEY  = "${one(data.aws_secretsmanager_secret.langsmith[*].arn)}:API_KEY::"
+    },
+    !local.is_byoc && var.datadog_api_key_secret_arn != null ? {
+      DD_API_KEY = var.datadog_api_key_secret_arn
+    } : {},
+  )
 }
 
 module "lambdas" {
@@ -41,7 +64,7 @@ module "lambdas" {
   # internal_reactive_base_url is a plain string, so nothing else orders these after the ECS
   # service. Until its new deployment is steady the Cloud Map name has no A record, and a
   # Lambda updated first fails every internal call and loses the run to SQS redelivery.
-  depends_on = [aws_ecs_service.reactive]
+  depends_on = [aws_ecs_service.reactive, aws_lambda_invocation.secret_values]
 
   company                   = var.company
   tenant_name               = var.tenant_name
@@ -56,26 +79,20 @@ module "lambdas" {
   ecs_task_sg_id            = var.ecs_task_sg_id
   rds_endpoint              = var.rds_endpoint
   rds_port                  = var.rds_port
-  postgres_password         = random_password.company_db.result
   neo4j_uri                 = local.neo4j_uri
   neo4j_username            = local.neo4j_username
-  neo4j_password            = random_password.company_neo4j.result
   deployment_mode           = var.deployment_mode
   datadog_enabled           = !local.is_byoc
   datadog_base_env          = local.datadog_lambda_base_env
-  datadog_api_key           = one(data.aws_secretsmanager_secret_version.datadog_api_key[*].secret_string)
   datadog_forwarder_arn     = var.datadog_forwarder_arn
   reactive_image_uri        = var.lambda_image_uris["reactive"]
   aws_region                = data.aws_region.current.name
   sqs_queue_arn             = aws_sqs_queue.lambda.arn
   langsmith_enabled         = !local.is_byoc
-  langsmith_secret_string   = one(data.aws_secretsmanager_secret_version.langsmith[*].secret_string)
-  # Header on reactive-Lambda self-calls to the internal API; without it a finished run cannot report its result.
-  # Ternary, not coalesce — coalesce(null, "") throws.
-  orchestrator_secret = local.is_byoc ? random_password.orchestrator_secret[0].result : (
-    var.orchestrator_internal_token_secret_arn != null ? one(data.aws_secretsmanager_secret_version.orchestrator_internal_token[*].secret_string) : ""
-  )
-  jwt_secret                 = local.is_byoc ? random_password.jwt_secret[0].result : ""
+  # JWT_SECRET is not read by this function, but the config requires it at import.
+  secret_env = merge(local.lambda_secret_env, local.is_byoc ? {
+    JWT_SECRET = "${one(aws_secretsmanager_secret.app[*].arn)}:JWT_SECRET::"
+  } : {})
   elasticsearch_enabled      = local.elasticsearch_enabled
   elasticsearch_url          = local.elasticsearch_enabled ? data.aws_ssm_parameter.elasticsearch_url[0].value : null
   elasticsearch_api_key      = local.elasticsearch_enabled ? data.aws_ssm_parameter.elasticsearch_api_key[0].value : null
@@ -89,6 +106,9 @@ module "lambdas" {
 module "scheduled_lambdas" {
   source = "./lambdas/scheduled"
 
+  # Every handler reads its secrets at cold start, so the values must exist first.
+  depends_on = [aws_lambda_invocation.secret_values]
+
   company                    = var.company
   tenant_name                = var.tenant_name
   arn_prefix                 = local.arn_prefix
@@ -98,17 +118,14 @@ module "scheduled_lambdas" {
   ecs_task_sg_id             = var.ecs_task_sg_id
   rds_endpoint               = var.rds_endpoint
   rds_port                   = var.rds_port
-  postgres_password          = random_password.company_db.result
   neo4j_uri                  = local.neo4j_uri
   neo4j_username             = local.neo4j_username
-  neo4j_password             = random_password.company_neo4j.result
+  secret_env                 = local.lambda_secret_env
   deployment_mode            = var.deployment_mode
   datadog_enabled            = !local.is_byoc
   datadog_base_env           = local.datadog_lambda_base_env
   datadog_forwarder_arn      = var.datadog_forwarder_arn
   langsmith_enabled          = !local.is_byoc
-  langsmith_secret_string    = one(data.aws_secretsmanager_secret_version.langsmith[*].secret_string)
-  datadog_api_key            = one(data.aws_secretsmanager_secret_version.datadog_api_key[*].secret_string)
   lambda_bundle_image_uri    = var.lambda_bundle_image_uri
   memory_mb                  = var.scheduled_lambda_memory_mb
   llm_model_env              = local.llm_model_env
@@ -122,8 +139,5 @@ module "scheduled_lambdas" {
   internal_sg_id = aws_security_group.internal.id
   # knowledge-graph alone: it asks reactive for a GitHub installation token over the internal API.
   internal_reactive_base_url = local.internal_reactive_base_url
-  orchestrator_secret = local.is_byoc ? random_password.orchestrator_secret[0].result : (
-    var.orchestrator_internal_token_secret_arn != null ? one(data.aws_secretsmanager_secret_version.orchestrator_internal_token[*].secret_string) : ""
-  )
-  tags = local.tags
+  tags                       = local.tags
 }

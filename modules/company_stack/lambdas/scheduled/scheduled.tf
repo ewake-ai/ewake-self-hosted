@@ -18,8 +18,7 @@ locals {
     LAMBDA_QUEUE_URL = var.lambda_queue_url
     # knowledge-graph alone reads GitHub, and asks reactive for an installation token rather than
     # holding the App signing key. It shares this function, so the pair reaches every handler.
-    INTERNAL_BASE_URL   = var.internal_reactive_base_url
-    ORCHESTRATOR_SECRET = var.orchestrator_secret
+    INTERNAL_BASE_URL = var.internal_reactive_base_url
   })
 }
 
@@ -68,7 +67,7 @@ resource "aws_lambda_function" "scheduled" {
     precondition {
       condition = lookup(local.scheduled_env, "DD_FEATURE_FLAGS_CONFIGURATION_SOURCE", null) != "agentless" || (
         lookup(local.scheduled_env, "DD_SITE", null) != null &&
-        var.datadog_api_key != null && var.datadog_api_key != ""
+        contains(keys(var.secret_env), "DD_API_KEY")
       )
       error_message = "scheduled sets agentless feature flags without DD_SITE and DD_API_KEY in the same env."
     }

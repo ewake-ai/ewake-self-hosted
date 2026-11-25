@@ -22,15 +22,16 @@ locals {
     local.company_base_url
   )
 
-  # The connectors compiled into the one array both containers read. Assembling here rather
-  # than letting ECS resolve a secret is a deliberate trade: valueFrom maps one variable to
-  # one secret and cannot concatenate, so a per-connector layout means terraform reads the
-  # values. They therefore appear in the task definition and in terraform state — treat state
-  # as holding customer OAuth credentials.
-  dex_connectors = jsonencode([
-    for id in var.company.sso_connectors :
-    jsondecode(data.aws_secretsmanager_secret_version.sso_connector[id].secret_string)
-  ])
+  # One variable for each connector, which ECS fills from that connector's secret when the
+  # task starts. valueFrom maps one variable to one secret and cannot concatenate, so both
+  # containers build the array from these, in the order of the names. Terraform holds the
+  # ARNs and never the connectors, which carry the customer's OAuth client secrets.
+  dex_connector_secrets = [
+    for index, id in var.company.sso_connectors : {
+      name      = format("DEX_CONNECTOR_%02d", index)
+      valueFrom = aws_secretsmanager_secret.sso_connector[id].arn
+    }
+  ]
 
   # Not a secret: it only names reactive's client registration inside Dex. The matching
   # secret is DEX_CLIENT_SECRET, below.
@@ -54,9 +55,6 @@ locals {
       # callback path for the redirect, so nothing here assembles either — the same value
       # reaches reactive as SSO_BASE_URL in ecs_task.tf, which is what makes the two agree.
       { name = "SSO_BASE_URL", value = local.dex_base_url },
-      # The same array reactive receives, so the login page cannot offer a connector Dex
-      # does not serve.
-      { name = "DEX_CONNECTORS", value = local.dex_connectors },
       { name = "DEX_CLIENT_ID", value = local.dex_client_id },
       # Dex has no schema option of its own and creates its tables wherever search_path
       # points. Without this it fills `public` alongside the application's own tables.
@@ -66,14 +64,16 @@ locals {
       # the application's own connection pool does.
       { name = "POSTGRES_SSL_MODE", value = "require" },
     ]
-    secrets = [
+    # The connectors are the same variables reactive receives, so the login page cannot offer
+    # a connector Dex does not serve.
+    secrets = concat(local.dex_connector_secrets, [
       { name = "DEX_CLIENT_SECRET", valueFrom = local.dex_client_secret_value_from },
       { name = "POSTGRES_HOST", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:host::" },
       { name = "POSTGRES_PORT", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:port::" },
       { name = "POSTGRES_DB", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:database::" },
       { name = "POSTGRES_USER", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:username::" },
       { name = "POSTGRES_PASSWORD", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:password::" },
-    ]
+    ])
     # No dependsOn. Dex needs the `dex` schema to exist before its own migrations run,
     # and nothing in this task creates it: db_migrate.tf's task owns every chain and
     # update-reactive-service.yml runs it to completion before repointing the service,
@@ -94,10 +94,14 @@ locals {
   }] : []
 }
 
-# The connectors this deployment can log in with: a JSON array of complete Dex connector
-# objects, read by the sidecar as its `connectors` block and by reactive to render the
-# login page. One secret per connector so adding a provider is a new secret rather than a
-# rewrite of everyone else's — see sidecars/dex/README.md.
+# The connectors this deployment can log in with. Each secret holds one complete Dex
+# connector object. One secret per connector so adding a provider is a new secret rather
+# than a rewrite of everyone else's.
+#
+# Terraform creates the secret, and secret_values.tf has the bootstrap Lambda write a
+# placeholder into it when it is empty, so the task can start. Dex rejects a connector with
+# no type, so the placeholder fails visibly rather than admitting anyone. An operator then
+# writes the real object straight to the secret, and nothing here ever reads it.
 resource "aws_secretsmanager_secret" "sso_connector" {
   for_each = toset(var.company.sso_connectors)
 
@@ -105,53 +109,7 @@ resource "aws_secretsmanager_secret" "sso_connector" {
   tags = local.tags
 }
 
-resource "aws_secretsmanager_secret_version" "sso_connector" {
-  # Keyed off the variable, not off aws_secretsmanager_secret.sso_connector. for_each keys
-  # must be known at plan time, and a resource map reads as wholly unknown while its
-  # instances are still to be created — so keying off the resource fails the first apply
-  # of any install that actually has connectors:
-  #
-  #   Invalid for_each argument: aws_secretsmanager_secret.sso_connector will be known
-  #   only after apply
-  #
-  # The key set is identical either way, so instance addresses do not move.
-  for_each = toset(var.company.sso_connectors)
-
-  secret_id = aws_secretsmanager_secret.sso_connector[each.key].id
-
-  # A placeholder, so the data source below has a version to read on the first apply.
-  # Dex rejects a connector with no type, so this fails visibly rather than admitting
-  # anyone; onboarding overwrites it with the real object.
-  secret_string = jsonencode({ id = each.key, name = each.key, type = "" })
-
-  # Onboarding and any later rotation write straight to the secret, so terraform must not
-  # drag it back to the placeholder.
-  lifecycle {
-    ignore_changes = [secret_string]
-  }
-}
-
 resource "aws_secretsmanager_secret" "company_sso" {
   name = "${local.ssm_path}/sso"
   tags = local.tags
-}
-
-resource "aws_secretsmanager_secret_version" "company_sso" {
-  secret_id     = aws_secretsmanager_secret.company_sso.id
-  secret_string = "[]"
-
-  lifecycle {
-    ignore_changes = [secret_string]
-  }
-}
-
-# Read back rather than kept from the resource: the resource holds the placeholder, and
-# ignore_changes means terraform never learns what onboarding wrote. This is the only way to
-# assemble the array, and it is why the values land in state — see the note on
-# local.dex_connectors.
-data "aws_secretsmanager_secret_version" "sso_connector" {
-  # Same reason as the resource above: static keys, resource reference in the value.
-  for_each = toset(var.company.sso_connectors)
-
-  secret_id = aws_secretsmanager_secret_version.sso_connector[each.key].secret_id
 }

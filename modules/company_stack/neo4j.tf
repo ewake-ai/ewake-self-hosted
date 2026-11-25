@@ -1,16 +1,14 @@
-# Self-hosted Neo4j 5 Community on a single EC2 + EBS. Credentials
-# are written to `${local.ssm_path}/neo4j` and consumed by the reactive ECS task
-# and the scheduled Lambdas as env vars. Naming and shape mirror the RDS
-# secret in rds_db.tf.
+# Self-hosted Neo4j 5 Community on a single EC2 + EBS. The password is in
+# `${local.ssm_path}/neo4j-password`. The instance reads it at boot, the reactive
+# ECS task reads it at start and the Lambdas read it at cold start.
 
 locals {
   # EBS volumes are AZ-bound; the instance must live in the same AZ. The
   # ECS tasks span all private subnets and reach here across AZs within the VPC.
   neo4j_subnet_id = var.private_subnets[0]
 
-  # Single source of truth for the connection identity — referenced by the
-  # composite secret payload and by lambdas.tf when forwarding these into the
-  # reactive and scheduled Lambda submodules.
+  # Single source of truth for the connection identity: ecs_task.tf and lambdas.tf
+  # both read these.
   neo4j_username = "neo4j"
   neo4j_uri      = "bolt://${aws_instance.neo4j.private_ip}:7687"
 }
@@ -29,24 +27,11 @@ data "aws_subnet" "neo4j" {
   id = local.neo4j_subnet_id
 }
 
-resource "random_password" "company_neo4j" {
-  length  = 32
-  special = false
-}
-
-# Password-only secret consumed by the EC2 at boot via its instance profile.
-# Kept separate from the composite `${ssm_path}/neo4j` secret below to break
-# the cycle: the composite carries the URI (derived from the instance's
-# private_ip and therefore depending on the instance), which would make the
-# instance depend on itself if the password lived only there.
+# The one copy of the password, as a plain string. secret_values.tf has the bootstrap
+# Lambda generate it. The EC2 reads it at boot via its instance profile.
 resource "aws_secretsmanager_secret" "company_neo4j_password" {
   name = "${local.ssm_path}/neo4j-password"
   tags = local.tags
-}
-
-resource "aws_secretsmanager_secret_version" "company_neo4j_password" {
-  secret_id     = aws_secretsmanager_secret.company_neo4j_password.id
-  secret_string = random_password.company_neo4j.result
 }
 
 # EC2 instance profile — the Neo4j box's *only* IAM privilege is reading its
@@ -161,6 +146,9 @@ resource "aws_instance" "neo4j" {
   vpc_security_group_ids = [aws_security_group.neo4j.id]
   iam_instance_profile   = aws_iam_instance_profile.neo4j.name
 
+  # The instance reads its password at first boot, so the secret must hold one by then.
+  depends_on = [aws_lambda_invocation.secret_values]
+
   # Bounded so a stuck RunInstances (rare regional-capacity issue) fails fast
   # instead of blocking the whole apply. On failure, retry: subsequent attempts
   # usually pick up freed capacity or the customer can override neo4j_instance_type.
@@ -244,20 +232,4 @@ resource "aws_dlm_lifecycle_policy" "neo4j_snapshots" {
   }
 
   tags = local.tags
-}
-
-resource "aws_secretsmanager_secret" "company_neo4j" {
-  name = "${local.ssm_path}/neo4j"
-  tags = local.tags
-}
-
-resource "aws_secretsmanager_secret_version" "company_neo4j" {
-  secret_id = aws_secretsmanager_secret.company_neo4j.id
-  secret_string = jsonencode({
-    NEO4J_URI      = local.neo4j_uri
-    NEO4J_USERNAME = local.neo4j_username
-    NEO4J_PASSWORD = random_password.company_neo4j.result
-  })
-
-  depends_on = [aws_volume_attachment.neo4j_data]
 }

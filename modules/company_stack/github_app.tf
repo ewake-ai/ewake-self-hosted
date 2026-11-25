@@ -12,8 +12,9 @@
 # Deliberately not under ${ssm_path}/integrations/: the application creates and deletes secrets
 # under that prefix at runtime, and would fight terraform over one placed there.
 #
-# `sensitive` keeps the private key out of plan output and the console, not out of the state
-# file. A backend holding this wants encryption and restricted reads.
+# The private key and the webhook secret are ephemeral variables, written through a write-only
+# argument. Terraform sends them to Secrets Manager and stores neither in the plan nor in the
+# state. It cannot see that one changed either, so github_app_secret_version says when to write.
 
 variable "github_app_client_id" {
   description = "Client ID of the GitHub App this deployment acts as — \"Client ID\" on the App's settings page. Null, with the other two, to leave the App unregistered and register one from the dashboard instead."
@@ -40,43 +41,66 @@ variable "github_app_slug" {
 }
 
 variable "github_app_private_key" {
-  description = "PEM contents of a private key generated on that App's settings page — the file itself, newlines and all, not a path to it. Signs the App JWT that mints installation tokens. Reaches terraform state; see the comment above this variable."
+  description = "PEM contents of a private key generated on that App's settings page — the file itself, newlines and all, not a path to it. Signs the App JWT that mints installation tokens. Not stored in terraform state."
   type        = string
   default     = null
   sensitive   = true
+  ephemeral   = true
   nullable    = true
 
   validation {
     condition     = var.github_app_private_key == null || trimspace(var.github_app_private_key) != ""
     error_message = "github_app_private_key is blank. Pass null to register the App from the dashboard instead — a blank string is almost always an unexpanded variable."
   }
+
+  # Checked here and not in a precondition, because a resource cannot read an ephemeral value.
+  validation {
+    condition     = (var.github_app_private_key != null) == (var.github_app_client_id != null)
+    error_message = "github_app_client_id, github_app_slug and github_app_private_key go together. Set all three to seed an App you already have, or none to register one from the dashboard."
+  }
 }
 
 variable "github_app_webhook_secret" {
-  description = "Webhook secret of that App, the \"Webhook secret\" field on its settings page. The deployment checks every webhook delivery from the App against it. Null for an App with no webhook."
+  description = "Webhook secret of that App, the \"Webhook secret\" field on its settings page. The deployment checks every webhook delivery from the App against it. Null for an App with no webhook. Not stored in terraform state."
   type        = string
   default     = null
   sensitive   = true
+  ephemeral   = true
   nullable    = true
 
   validation {
     condition     = var.github_app_webhook_secret == null || trimspace(var.github_app_webhook_secret) != ""
     error_message = "github_app_webhook_secret is blank. Pass null to run without a webhook — a blank string is almost always an unexpanded variable."
   }
+
+  # The webhook secret is written into the App's own secret, which only exists when the App is set.
+  validation {
+    condition     = var.github_app_webhook_secret == null || var.github_app_client_id != null
+    error_message = "github_app_webhook_secret needs the GitHub App: set github_app_client_id, github_app_slug and github_app_private_key too."
+  }
+}
+
+variable "github_app_secret_version" {
+  description = "Raise it by one after you change github_app_client_id, github_app_slug, github_app_private_key or github_app_webhook_secret. Terraform does not store the key, so it cannot see the change, and it writes the secret again only when this number changes."
+  type        = number
+  default     = 1
+  nullable    = false
+
+  validation {
+    condition     = var.github_app_secret_version >= 1 && floor(var.github_app_secret_version) == var.github_app_secret_version
+    error_message = "github_app_secret_version must be a whole number, 1 or more."
+  }
 }
 
 locals {
-  # A list of argument *names*, and nonsensitive() because that is all it is: which arguments were
-  # supplied is not what any of them contains. Without it the private key's marking spreads into
-  # the precondition's message below, which terraform then refuses to render — leaving a check
-  # that fires and explains nothing.
-  github_app_given = nonsensitive(compact([
+  # The two arguments that are not secret. The private key is ephemeral, so it cannot decide
+  # whether a resource exists. Its own validation ties it to the client ID.
+  github_app_given = compact([
     var.github_app_client_id != null ? "github_app_client_id" : "",
     var.github_app_slug != null ? "github_app_slug" : "",
-    var.github_app_private_key != null ? "github_app_private_key" : "",
-  ]))
+  ])
 
-  github_app_enabled = length(local.github_app_given) == 3
+  github_app_enabled = length(local.github_app_given) == 2
 }
 
 resource "terraform_data" "github_app_shape" {
@@ -85,15 +109,9 @@ resource "terraform_data" "github_app_shape" {
       condition = local.github_app_enabled || length(local.github_app_given) == 0
       error_message = join(" ", [
         "github_app_client_id, github_app_slug and github_app_private_key go together:",
-        "${length(local.github_app_given)} of the 3 were set (${join(", ", local.github_app_given)}).",
+        "only ${join(", ", local.github_app_given)} was set.",
         "Set all three to seed an App you already have, or none to register one from the dashboard."
       ])
-    }
-
-    # The webhook secret is written into the App's own secret, which only exists when the App is set.
-    precondition {
-      condition     = nonsensitive(var.github_app_webhook_secret == null) || local.github_app_enabled
-      error_message = "github_app_webhook_secret needs the GitHub App: set github_app_client_id, github_app_slug and github_app_private_key too."
     }
   }
 }
@@ -112,12 +130,12 @@ resource "aws_secretsmanager_secret" "github_app" {
   recovery_window_in_days = 0
 }
 
-# No ignore_changes: terraform is the only writer here, so suppressing updates would mean a
-# rotated key never reaching the task.
+# Write-only: terraform sends the value and keeps no copy, so a rotated key reaches the secret
+# only when github_app_secret_version changes.
 resource "aws_secretsmanager_secret_version" "github_app" {
   count     = local.github_app_enabled ? 1 : 0
   secret_id = aws_secretsmanager_secret.github_app[0].id
-  secret_string = jsonencode(merge(
+  secret_string_wo = jsonencode(merge(
     {
       CLIENT_ID       = var.github_app_client_id
       APP_SLUG        = var.github_app_slug
@@ -125,4 +143,5 @@ resource "aws_secretsmanager_secret_version" "github_app" {
     },
     var.github_app_webhook_secret == null ? {} : { WEBHOOK_SECRET = var.github_app_webhook_secret }
   ))
+  secret_string_wo_version = var.github_app_secret_version
 }
