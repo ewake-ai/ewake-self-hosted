@@ -491,6 +491,10 @@ in your VPC. During `terraform apply` it generates each password with Python's
 `secrets` module and writes it to its secret. It fills a secret only where a
 value is missing, so a later apply changes no password.
 
+Do not change a secret by hand while `terraform apply` runs. When the install
+writes a secret, it writes the whole value from what it read a moment before,
+so a change made in between is lost.
+
 Each runtime reads its secrets itself. ECS injects them into the dashboard task
 when the task starts. Each Lambda reads them from Secrets Manager at cold
 start: its environment holds a `SECRET_ENV` variable with the ARNs, and no
