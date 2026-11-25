@@ -38,10 +38,12 @@ resource "aws_iam_role_policy" "bootstrap_lambda" {
         ]
       },
       {
-        # The `secrets` action fills each secret that terraform creates empty.
+        # The `secrets` action fills each secret that terraform creates empty. It moves
+        # AWSCURRENT to its new version itself, so that it never replaces a value that
+        # changed after it read the secret.
         Sid      = "WriteTenantSecrets"
         Effect   = "Allow"
-        Action   = ["secretsmanager:PutSecretValue"]
+        Action   = ["secretsmanager:PutSecretValue", "secretsmanager:UpdateSecretVersionStage"]
         Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:ewake/${var.tenant_name}/*"
       },
       {
