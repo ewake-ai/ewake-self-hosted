@@ -56,12 +56,6 @@ locals {
   } : {}
 }
 
-# Reactive-Lambda env injection can't use ECS secrets syntax, so we read the value here.
-data "aws_secretsmanager_secret_version" "orchestrator_internal_token" {
-  count     = var.orchestrator_internal_token_secret_arn != null ? 1 : 0
-  secret_id = var.orchestrator_internal_token_secret_arn
-}
-
 resource "aws_cloudwatch_log_group" "ecs_reactive" {
   name              = "/${local.ssm_path}/reactive"
   retention_in_days = 14
@@ -110,6 +104,9 @@ resource "aws_ecs_task_definition" "reactive" {
         { name = "DD_SERVICE", value = "reactive" },
         { name = "LAMBDA_QUEUE_URL", value = aws_sqs_queue.lambda.url },
         { name = "LOG_CLUSTERING_SIDECAR_URL", value = local.log_clustering_sidecar_url },
+        # Not secrets, so they are plain values. Only the password comes from Secrets Manager.
+        { name = "NEO4J_URI", value = local.neo4j_uri },
+        { name = "NEO4J_USERNAME", value = local.neo4j_username },
         ], [
         # Dashboard API — low usage, and its ceiling doubles during a rolling
         # deploy. The connection budget is shared across all runtimes.
@@ -121,9 +118,6 @@ resource "aws_ecs_task_definition" "reactive" {
         # and verifies the issuer against it, and Dex compares the two byte-for-byte — one
         # local feeding both containers is what keeps them from drifting apart.
         { name = "SSO_BASE_URL", value = local.dex_base_url },
-        # Compiled from the per-connector secrets in dex.tf, identical to what the sidecar
-        # gets, so the login page and Dex cannot disagree about which SSOs exist.
-        { name = "DEX_CONNECTORS", value = local.dex_connectors },
         ],
         var.orchestrator_url != null ? [
           { name = "EWAKE_ORCHESTRATOR_URL", value = var.orchestrator_url }
@@ -138,16 +132,18 @@ resource "aws_ecs_task_definition" "reactive" {
         local.reactive_container_env,
         local._admin_notify_env,
       [for name, id in local.llm_model_env : { name = name, value = id }])
-      secrets = concat([
-        { name = "DEX_CLIENT_SECRET", valueFrom = local.dex_client_secret_value_from },
-        { name = "POSTGRES_HOST", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:host::" },
-        { name = "POSTGRES_PORT", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:port::" },
-        { name = "POSTGRES_DB", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:database::" },
-        { name = "POSTGRES_USER", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:username::" },
-        { name = "POSTGRES_PASSWORD", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:password::" },
-        { name = "NEO4J_URI", valueFrom = "${aws_secretsmanager_secret.company_neo4j.arn}:NEO4J_URI::" },
-        { name = "NEO4J_USERNAME", valueFrom = "${aws_secretsmanager_secret.company_neo4j.arn}:NEO4J_USERNAME::" },
-        { name = "NEO4J_PASSWORD", valueFrom = "${aws_secretsmanager_secret.company_neo4j.arn}:NEO4J_PASSWORD::" },
+      secrets = concat(
+        # The same variables the sidecar gets, so the login page and Dex cannot disagree
+        # about which SSOs exist.
+        local.dex_connector_secrets,
+        [
+          { name = "DEX_CLIENT_SECRET", valueFrom = local.dex_client_secret_value_from },
+          { name = "POSTGRES_HOST", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:host::" },
+          { name = "POSTGRES_PORT", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:port::" },
+          { name = "POSTGRES_DB", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:database::" },
+          { name = "POSTGRES_USER", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:username::" },
+          { name = "POSTGRES_PASSWORD", valueFrom = "${aws_secretsmanager_secret.company_db.arn}:password::" },
+          { name = "NEO4J_PASSWORD", valueFrom = aws_secretsmanager_secret.company_neo4j_password.arn },
         ],
         local.is_byoc ? [
           { name = "JWT_SECRET", valueFrom = "${one(aws_secretsmanager_secret.app[*].arn)}:JWT_SECRET::" },
@@ -268,18 +264,19 @@ resource "aws_ecs_service" "reactive" {
     registry_arn = aws_service_discovery_service.reactive.arn
   }
 
-  # Task references neo4j and db secrets by ARN — terraform auto-tracks the
-  # secret dependency, but not the secret VERSION. If a version's write is
-  # delayed (neo4j_secret_version depends_on volume_attachment → EC2 → cloud-init),
-  # ECS starts pulling the task early and every attempt fails with
+  # The task references its secrets by ARN. Terraform tracks the secret and not its
+  # value, which the bootstrap Lambda writes in secret_values.tf. A task that starts
+  # before the value exists fails every attempt with
   # `ResourceNotFoundException: no AWSCURRENT staging label`, then the service
   # hangs in wait_for_steady_state forever. Explicit depends_on closes the race.
+  #
+  # The volume attachment keeps the dashboard from starting before Neo4j has its disk.
   #
   # db_migrate keeps a fresh install from serving an empty schema, and seed_company from
   # serving one with no company row — the dashboard reads it before it starts listening.
   depends_on = [
-    aws_secretsmanager_secret_version.company_neo4j,
-    aws_secretsmanager_secret_version.company_db,
+    aws_lambda_invocation.secret_values,
+    aws_volume_attachment.neo4j_data,
     # Same race, different reader: the dashboard reads this secret itself at runtime, so nothing
     # in the task definition references it and only this line orders the two. Keep it — a task that
     # starts first would answer "no App configured" until its next read. Empty when none is set.

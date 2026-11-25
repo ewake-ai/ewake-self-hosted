@@ -40,9 +40,9 @@ variable "rds_port" {
   type = number
 }
 
-variable "postgres_password" {
-  type      = string
-  sensitive = true
+variable "secret_env" {
+  description = "Env vars the function reads from Secrets Manager at cold start: a map from the env var name to a reference in the format of the ECS valueFrom (a secret ARN, with :<json-key>:: after it for one key of a JSON secret). Terraform holds the references and never the values."
+  type        = map(string)
 }
 
 variable "neo4j_uri" {
@@ -53,20 +53,9 @@ variable "neo4j_username" {
   type = string
 }
 
-variable "neo4j_password" {
-  type      = string
-  sensitive = true
-}
-
 variable "datadog_base_env" {
   description = "Datadog env shared by every Lambda in company_stack, computed once by the parent so the two child modules cannot drift. Per-runtime keys are merged on top by the Lambda that needs them."
   type        = map(string)
-}
-
-variable "datadog_api_key" {
-  description = "Raw Datadog API key for the reactive Lambda's agentless feature-flag source. Plaintext, not JSON, so it needs no jsondecode. Nullable — null when flags are off."
-  type        = string
-  sensitive   = true
 }
 
 variable "deployment_mode" {
@@ -88,22 +77,6 @@ variable "aws_region" {
 
 variable "sqs_queue_arn" {
   type = string
-}
-
-variable "langsmith_secret_string" {
-  type      = string
-  sensitive = true
-}
-
-variable "orchestrator_secret" {
-  type      = string
-  sensitive = true
-}
-
-# Unread here — required at config import. See the scheduled submodule's copy.
-variable "jwt_secret" {
-  type      = string
-  sensitive = true
 }
 
 variable "elasticsearch_url" {

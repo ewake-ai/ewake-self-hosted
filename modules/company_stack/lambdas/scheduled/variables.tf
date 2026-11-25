@@ -38,9 +38,9 @@ variable "rds_port" {
   type = number
 }
 
-variable "postgres_password" {
-  type      = string
-  sensitive = true
+variable "secret_env" {
+  description = "Env vars the function reads from Secrets Manager at cold start: a map from the env var name to a reference in the format of the ECS valueFrom (a secret ARN, with :<json-key>:: after it for one key of a JSON secret). Terraform holds the references and never the values."
+  type        = map(string)
 }
 
 variable "neo4j_uri" {
@@ -49,11 +49,6 @@ variable "neo4j_uri" {
 
 variable "neo4j_username" {
   type = string
-}
-
-variable "neo4j_password" {
-  type      = string
-  sensitive = true
 }
 
 variable "datadog_base_env" {
@@ -68,12 +63,6 @@ variable "deployment_mode" {
 
 variable "datadog_forwarder_arn" {
   type = string
-}
-
-variable "langsmith_secret_string" {
-  description = "JSON-encoded LangSmith secret value."
-  type        = string
-  sensitive   = true
 }
 
 variable "lambda_bundle_image_uri" {
@@ -111,12 +100,6 @@ variable "datadog_enabled" {
   type        = bool
 }
 
-variable "datadog_api_key" {
-  description = "Raw Datadog API key for the knowledge-graph Lambda's agentless feature-flag source. Plaintext, not JSON, so it needs no jsondecode. Nullable — null when flags are off."
-  type        = string
-  sensitive   = true
-}
-
 variable "tenant_name" {
   type = string
 }
@@ -124,12 +107,6 @@ variable "tenant_name" {
 variable "internal_reactive_base_url" {
   description = "In-VPC base URL of the reactive task (Cloud Map name, port 3000). Injected as INTERNAL_BASE_URL on knowledge-graph alone, which is the only scheduled Lambda that reads GitHub and so the only one that has to ask reactive for an installation token."
   type        = string
-}
-
-variable "orchestrator_secret" {
-  description = "Bearer token the knowledge-graph Lambda signs its internal-API calls with, so reactive answers its request for a GitHub installation token. Scoped to that one function rather than the whole scheduled fleet: nothing else calls the internal API."
-  type        = string
-  sensitive   = true
 }
 
 variable "lambda_queue_url" {

@@ -55,7 +55,7 @@ company = {
 # Check the release notes for the version you want and set it here. Ewake keeps
 # a limited number of builds, so a tag named here goes away eventually — a fresh
 # install should name a recent one rather than copying this line unchanged.
-app_image_tag = "ewake-v0.189.0"
+app_image_tag = "ewake-v0.270.0"
 
 root_domain    = "ewake.yourcompany.com"
 hosted_zone_id = "Z0123456789ABCDEFGHIJ"

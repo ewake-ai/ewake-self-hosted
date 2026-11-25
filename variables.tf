@@ -205,6 +205,19 @@ variable "app_image_tag" {
     condition     = trimspace(var.app_image_tag) != ""
     error_message = "app_image_tag must not be empty; an empty string is almost always an unexpanded variable."
   }
+
+  # From this version the bootstrap Lambda fills the secrets and each Lambda reads its own
+  # at cold start. An older image would start with no database password. A tag that is not
+  # a release version, such as a build of your own, is not checked.
+  #
+  # The number is the version as major * 1000000 + minor * 1000 + patch: 0.270.0 is 270000.
+  validation {
+    condition = !can(regex("^ewake-v\\d+\\.\\d+\\.\\d+$", var.app_image_tag)) || sum([
+      for index, part in regex("^ewake-v(\\d+)\\.(\\d+)\\.(\\d+)$", var.app_image_tag) :
+      tonumber(part) * pow(1000, 2 - index)
+    ]) >= 270000
+    error_message = "This release needs app_image_tag ewake-v0.270.0 or later. From that version the application reads its secrets from Secrets Manager, so that terraform state holds none. See UPGRADING.md."
+  }
 }
 
 # Optional. Leave all three unset to connect GitHub with a personal access token instead.
@@ -226,19 +239,28 @@ variable "github_app_slug" {
 }
 
 variable "github_app_private_key" {
-  description = "PEM contents of a private key generated on that App's settings page. Reaches terraform state, so the backend holding it wants encryption and restricted reads."
+  description = "PEM contents of a private key generated on that App's settings page. Terraform sends it to Secrets Manager and does not store it in the plan or in the state."
   type        = string
   default     = null
   sensitive   = true
+  ephemeral   = true
   nullable    = true
 }
 
 variable "github_app_webhook_secret" {
-  description = "Webhook secret of that App, the \"Webhook secret\" field on its settings page. Optional, and only with the three variables above. Reaches terraform state like the private key."
+  description = "Webhook secret of that App, the \"Webhook secret\" field on its settings page. Optional, and only with the three variables above. Not stored in the plan or in the state, like the private key."
   type        = string
   default     = null
   sensitive   = true
+  ephemeral   = true
   nullable    = true
+}
+
+variable "github_app_secret_version" {
+  description = "Raise it by one after you change any of the four github_app variables above. Terraform does not store the private key or the webhook secret, so it cannot see a change, and it writes the secret again only when this number changes."
+  type        = number
+  default     = 1
+  nullable    = false
 }
 
 variable "azs" {

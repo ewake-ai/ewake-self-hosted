@@ -1,12 +1,13 @@
 terraform {
-  # 1.10 is the floor for the S3 backend's `use_lockfile` below. On 1.6–1.9 the
-  # argument is rejected outright and `terraform init` fails.
-  required_version = ">= 1.10"
+  # 1.11 is the floor for ephemeral variables and write-only arguments, which keep the
+  # GitHub App private key out of the state. See modules/company_stack/github_app.tf.
+  required_version = ">= 1.11"
 
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+      source = "hashicorp/aws"
+      # 5.95 has the write-only secret_string_wo argument.
+      version = ">= 5.95, < 6.0"
     }
     random = {
       source  = "hashicorp/random"

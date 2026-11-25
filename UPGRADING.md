@@ -10,6 +10,74 @@ Always run `terraform plan` first and read it. Anything that destroys or
 replaces RDS, the Neo4j volume or the load balancer needs attention before you
 continue. Contact Ewake if the plan does.
 
+## One-time: secret values leave the Terraform state
+
+Applies to any deployment first applied before this release. One apply, no
+manual steps. It needs `app_image_tag = "ewake-v0.270.0"` or later, Terraform
+1.11 or later, and `terraform init -upgrade`, because the AWS provider floor
+moved to 5.95. The plan refuses an older `app_image_tag`.
+
+Before this release, Terraform generated every password and wrote it to Secrets
+Manager, so the state held each value in clear. Terraform now creates each
+secret and holds only its ARN. README → "Secrets" says who writes each value.
+
+**No password, key or connector of your deployment changes.** The plan shows:
+
+- Every `aws_secretsmanager_secret_version` destroyed, except the GitHub App
+  one. Destroying a version removes it from the state. It does not remove the
+  value: Secrets Manager never lets the current version of a secret be deleted,
+  so each secret keeps what it holds.
+- Every `random_password` destroyed. Destroying one deletes nothing in AWS.
+- Two `aws_lambda_invocation` resources created. They ask the bootstrap Lambda
+  to fill each secret that has no value. On your deployment every secret has
+  one, so it writes nothing.
+- One in-place update of `aws_db_instance`: the master password moves to a
+  write-only argument. Terraform sends RDS the password that is already in
+  `ewake/<tenant_name>/rds/master`, so it does not change.
+- `ewake/<tenant_name>/<company.name>/neo4j` destroyed. It held a second copy of
+  the Neo4j password. `…/neo4j-password` is now the only copy.
+- The dashboard task definition replaced and both Lambdas updated in place. The
+  dashboard restarts once.
+- `aws_secretsmanager_secret_version.github_app` replaced, if you seed a GitHub
+  App from Terraform. It writes the same values again through a write-only
+  argument.
+
+```sh
+terraform init -upgrade
+terraform apply
+```
+
+After the apply, the state holds no secret value. README → "Secrets" has a
+command to check it.
+
+**The old values are still in the old versions of the state file.** Your state
+bucket is versioned, so each earlier version holds the passwords of that time,
+and those passwords are still the current ones. To close that:
+
+1. Delete the noncurrent versions of the state object, or let a lifecycle rule
+   expire them.
+2. Or rotate the values. README → "Rotate a database password" covers the
+   database roles. For `JWT_SECRET`, `DEX_CLIENT_SECRET` and
+   `ORCHESTRATOR_SECRET`, delete the key from the `…/app` secret, run
+   `terraform apply -replace='module.company.aws_lambda_invocation.secret_values'`
+   so the bootstrap Lambda generates it again, then restart the dashboard
+   service. A new `JWT_SECRET` signs every user out.
+
+Do not go back to an earlier release of this repository after this apply. It
+would generate new passwords and write them over the current ones.
+
+The Terraform principal now needs `secretsmanager:GetSecretValue` on
+`ewake/<tenant_name>/rds/master`, at every plan and apply. A principal that
+created the deployment has it unless a policy of yours removes it.
+
+SSO connectors: Terraform no longer reads them, so a connector change needs no
+apply. Write the secret, then restart the dashboard service. README → "Configure
+SSO" has the commands.
+
+If you seed a GitHub App from Terraform: `github_app_private_key` and
+`github_app_webhook_secret` are no longer stored. Raise
+`github_app_secret_version` by one each time you change a `github_app_*` value.
+
 ## Nothing to do: agent traces in Braintrust
 
 A new opt-in feature. It stays off unless you set `company.braintrust`, and an

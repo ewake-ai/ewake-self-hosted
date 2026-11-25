@@ -24,29 +24,50 @@ resource "aws_db_subnet_group" "this" {
   }
 }
 
-resource "random_password" "rds_master" {
-  count = local.byo_database ? 0 : 1
-
-  length  = 32
-  special = false # avoids characters that need escaping in connection strings
-}
-
+# The master password never enters the plan or the state. Terraform creates the secret
+# empty, the bootstrap Lambda generates the password into it, and the instance below takes
+# it through a write-only argument.
 resource "aws_secretsmanager_secret" "rds_master" {
   count = local.byo_database ? 0 : 1
 
   name = "ewake/${var.tenant_name}/rds/master"
 }
 
-resource "aws_secretsmanager_secret_version" "rds_master" {
+# Fills the secret when it has no password, and changes nothing when it has one. So the
+# master password of a deployment that an earlier release created stays as it is.
+# No symbols in the password: they need escaping in connection strings.
+resource "aws_lambda_invocation" "rds_master" {
   count = local.byo_database ? 0 : 1
 
-  secret_id = aws_secretsmanager_secret.rds_master[0].id
-  secret_string = jsonencode({
-    username = "postgres"
-    password = random_password.rds_master[0].result
-    host     = aws_db_instance.this[0].address
-    port     = aws_db_instance.this[0].port
+  function_name = aws_lambda_function.bootstrap.function_name
+
+  input = jsonencode({
+    action = "secrets"
+    secrets = [{
+      arn = aws_secretsmanager_secret.rds_master[0].arn
+      fields = {
+        username = "postgres"
+        password = { generate = { length = 32 } }
+      }
+    }]
   })
+
+  # The function reaches Secrets Manager from the private subnets, so it needs their way out.
+  depends_on = [
+    aws_vpc_endpoint.interface,
+    aws_route.private_default,
+    aws_route_table_association.private,
+    aws_route.byo_private_default,
+  ]
+}
+
+# Read for the length of one plan or apply and stored nowhere.
+ephemeral "aws_secretsmanager_secret_version" "rds_master" {
+  count = local.byo_database ? 0 : 1
+
+  secret_id = aws_secretsmanager_secret.rds_master[0].arn
+
+  depends_on = [aws_lambda_invocation.rds_master]
 }
 
 resource "random_id" "final_snapshot" {
@@ -76,7 +97,7 @@ resource "aws_db_instance" "this" {
 
   # Omitted when restoring: the master user comes from the snapshot and RDS rejects
   # an attempt to name a different one. The password below is still applied, through
-  # a modify after the restore, so the secret this deployment writes stays true.
+  # a modify after the restore, so the secret of this deployment stays true.
   username = var.rds_snapshot_identifier == null ? "postgres" : null
 
   engine                      = "postgres"
@@ -89,8 +110,11 @@ resource "aws_db_instance" "this" {
   multi_az                    = var.rds_multi_az
   db_subnet_group_name        = aws_db_subnet_group.this[0].name
   vpc_security_group_ids      = [aws_security_group.rds[0].id]
-  password                    = random_password.rds_master[0].result
-  backup_retention_period     = 7
+  # Write-only: terraform sends the password to RDS and keeps no copy. It sends it again
+  # only when password_wo_version changes.
+  password_wo             = jsondecode(ephemeral.aws_secretsmanager_secret_version.rds_master[0].secret_string).password
+  password_wo_version     = 1
+  backup_retention_period = 7
   # Hardcoded, not a variable: its job is not stopping a deliberate destroy — that
   # only needs the one CLI call in the README, since destroy never re-applies
   # config. It is stopping an accidental replacement, which terraform will

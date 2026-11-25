@@ -173,7 +173,7 @@ resource "terraform_data" "db_migrate" {
   # bootstrap_db CREATEs the database these chains connect to; sharing its secret dependency
   # does not order against it.
   depends_on = [
-    aws_secretsmanager_secret_version.company_db,
+    aws_lambda_invocation.secret_values,
     aws_lambda_invocation.bootstrap_db,
   ]
 }

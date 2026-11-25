@@ -38,6 +38,13 @@ resource "aws_iam_role_policy" "bootstrap_lambda" {
         ]
       },
       {
+        # The `secrets` action fills each secret that terraform creates empty.
+        Sid      = "WriteTenantSecrets"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:PutSecretValue"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:ewake/${var.tenant_name}/*"
+      },
+      {
         Sid    = "VPCNetworking"
         Effect = "Allow"
         Action = [

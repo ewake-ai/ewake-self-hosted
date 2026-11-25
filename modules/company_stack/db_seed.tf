@@ -31,7 +31,7 @@ resource "aws_lambda_invocation" "seed_company" {
   # changed domain needs that row updated separately.
   depends_on = [
     terraform_data.db_migrate,
-    # The secret alone does not order against its version, and this reads ADMIN_PASSWORD.
-    aws_secretsmanager_secret_version.app,
+    # The secret alone does not order against its value, and this reads ADMIN_PASSWORD.
+    aws_lambda_invocation.secret_values,
   ]
 }

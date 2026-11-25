@@ -14,7 +14,7 @@ For upgrades of an existing deployment, see [UPGRADING.md](UPGRADING.md).
 
 | # | What you need |
 | - | ------------- |
-| 1 | Terraform >= 1.10 and the AWS CLI, authenticated as the same principal |
+| 1 | Terraform >= 1.11 and the AWS CLI, authenticated as the same principal |
 | 2 | A dedicated AWS account in `eu-west-3` |
 | 3 | A domain delegated to a Route53 hosted zone in that account |
 | 4 | An OIDC identity provider |
@@ -31,7 +31,7 @@ zone to this account, contact Ewake.
 
 **Identity provider.** Okta, Entra ID, Google Workspace, Auth0, or any
 spec-compliant OIDC provider. You can also start without one: Ewake then serves
-a username and password form, and Terraform generates an admin password into
+a username and password form, and the install generates an admin password into
 Secrets Manager under `ewake/<tenant_name>/<company.name>/app`, key
 `ADMIN_PASSWORD`.
 
@@ -88,9 +88,10 @@ aws s3api put-bucket-versioning \
 The Terraform principal needs `s3:GetObject`, `s3:PutObject` and
 `s3:DeleteObject` on this bucket.
 
-> **Terraform state holds credentials**, including SSO client secrets. Enable
-> server-side encryption, restrict access to the Terraform operator, and treat
-> the state file as a secret.
+The state holds no secret value: it holds the ARN of each secret, and never a
+password, a key or an SSO client secret. See [Secrets](#secrets). It still
+describes your whole deployment, so enable server-side encryption and restrict
+access to the Terraform operator.
 
 ### Route53 hosted zone
 
@@ -154,7 +155,7 @@ company = {
   sso_connectors = ["google"]
 }
 
-app_image_tag  = "ewake-v0.189.0"
+app_image_tag  = "ewake-v0.270.0"
 root_domain    = "ewake.example.com"
 hosted_zone_id = "Z0123456789ABCDEFGHIJ"
 azs            = ["eu-west-3a", "eu-west-3b"]
@@ -396,8 +397,7 @@ existing_database = {
 }
 ```
 
-No instance, subnet group, master password, master secret or database security
-group is created. The instance must be RDS Postgres, version 18 or later, in this
+No instance, subnet group or database security group is created. The instance must be RDS Postgres, version 18 or later, in this
 account and region.
 
 ### What this deployment still does to your instance
@@ -462,15 +462,85 @@ The first apply takes about 15 to 20 minutes.
 
 When it completes, `terraform output dashboard_url` is your dashboard URL.
 
+## Secrets
+
+Every secret of the deployment is in Secrets Manager in your account, under
+`ewake/<tenant_name>/`. Terraform creates each secret and holds its ARN. No
+secret value is in the plan or in the state. To check it on your own
+deployment:
+
+```sh
+password=$(aws secretsmanager get-secret-value \
+  --secret-id "ewake/<tenant_name>/<company.name>/db" \
+  --query SecretString --output text | jq -r .password)
+terraform state pull | grep -cF "$password"   # prints 0
+```
+
+| Secret | Holds | Who writes the value |
+|---|---|---|
+| `ewake/<tenant_name>/rds/master` | The database master user and password | The install |
+| `ewake/<tenant_name>/<company.name>/db` and `db-readonly` | The two database roles | The install |
+| `…/neo4j-password` | The Neo4j password | The install |
+| `…/app` | `ADMIN_PASSWORD`, `JWT_SECRET`, `DEX_CLIENT_SECRET`, `ORCHESTRATOR_SECRET` | The install |
+| `…/sso/<connector-id>` | One SSO connector, with its client secret | You. See [Configure SSO](#configure-sso) |
+| `…/github-app` | The GitHub App credentials | The dashboard, or Terraform. See [GitHub](#github) |
+| `…/integrations/*` | The tokens of each integration | The dashboard |
+
+"The install" is the bootstrap Lambda, `<tenant_name>-rds-bootstrap`, which runs
+in your VPC. During `terraform apply` it generates each password with Python's
+`secrets` module and writes it to its secret. It fills a secret only where a
+value is missing, so a later apply changes no password.
+
+Do not change a secret by hand while `terraform apply` runs. When the install
+writes a secret, it writes the whole value from what it read a moment before,
+so a change made in between is lost.
+
+Each runtime reads its secrets itself. ECS injects them into the dashboard task
+when the task starts. Each Lambda reads them from Secrets Manager at cold
+start: its environment holds a `SECRET_ENV` variable with the ARNs, and no
+value.
+
+Two values pass through Terraform, and it stores neither. Both use a write-only
+argument, which Terraform keeps out of the plan and the state:
+
+- The database master password. Terraform reads it from its secret for the
+  length of a plan or an apply, and hands it to RDS. So the Terraform principal
+  needs `secretsmanager:GetSecretValue` on `ewake/<tenant_name>/rds/master`.
+- The GitHub App private key and webhook secret, when you seed the App from
+  Terraform. They come from your variables and go to the App's secret.
+
+### Rotate a database password
+
+Write the new password to the secret, have the bootstrap Lambda apply it to the
+role, then restart what reads it:
+
+```sh
+aws secretsmanager put-secret-value \
+  --secret-id "ewake/<tenant_name>/<company.name>/db" \
+  --secret-string "$(aws secretsmanager get-secret-value \
+      --secret-id "ewake/<tenant_name>/<company.name>/db" --query SecretString --output text \
+    | jq -c --arg p "$(aws secretsmanager get-random-password --password-length 32 \
+        --exclude-punctuation --query RandomPassword --output text)" '.password = $p')"
+
+terraform apply -replace='module.company.aws_lambda_invocation.bootstrap_db'
+
+aws ecs update-service \
+  --cluster <tenant_name> --service <company.name> --force-new-deployment
+```
+
+Running Lambdas keep their open connections. Each one reads the new password at
+its next cold start.
+
 ## Post-install
 
 ### Configure SSO
 
-Login needs at least one SSO connector. This is two applies with a secret write
-in between.
+Login needs at least one SSO connector. This is one apply, one secret write and
+one restart.
 
 **1. Create the secret.** List the connector ID in `sso_connectors` and apply.
-The dashboard comes up, but nobody can log in yet. This is expected.
+The apply creates the secret with a placeholder in it. The dashboard comes up,
+but nobody can log in yet. This is expected.
 
 ```hcl
 company = {
@@ -514,15 +584,18 @@ Use `"type": "google"` or `"type": "github"` for those providers. For Microsoft
 Entra, use `"issuer": "https://login.microsoftonline.com/<tenant-id>/v2.0"` with
 a specific tenant ID, not `common`.
 
-**3. Apply again and redeploy:**
+**3. Restart the dashboard service:**
 
 ```sh
-terraform apply
 aws ecs update-service \
   --cluster <tenant_name> --service <company.name> \
-  --task-definition <tenant_name>-<company.name>-reactive \
   --force-new-deployment
 ```
+
+The service reads each connector from its secret when a task starts. Terraform
+never reads it, so no second apply is needed, and the client secret is not in
+the Terraform state or in the task definition. To rotate a client secret later,
+write the secret again and restart the service the same way.
 
 **Keeping the password login.** Once a connector is set, the login page shows
 only the SSO buttons. To keep the username and password form next to them, for
@@ -610,9 +683,19 @@ feature.
 
 If the App has a webhook, also set `github_app_webhook_secret` to the value of
 its **Webhook secret** field, so the deployment can check each delivery. It is
-optional, and the plan refuses it without the three variables above. The private key reaches Terraform state, so the backend holding that
-state wants encryption and restricted reads — which is the reason to prefer
-registering from the dashboard.
+optional, and the plan refuses it without the three variables above.
+
+Terraform sends the private key and the webhook secret to Secrets Manager and
+stores neither in the plan nor in the state. So it cannot see that one of them
+changed. After you change any of the four `github_app_*` values, raise
+`github_app_secret_version` by one, and the next apply writes the secret again:
+
+```hcl
+github_app_secret_version = 2
+```
+
+The key is still in your `terraform.tfvars` or your shell, which is the reason
+to prefer registering from the dashboard.
 
 Either way, once the App exists the GitHub card gains an **Install** action.
 Install it on the organisation, not on your user account: the deployment reads
